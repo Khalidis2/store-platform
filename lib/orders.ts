@@ -2,16 +2,21 @@ import { db } from "./db";
 import { releaseInventory, type LineItem } from "./inventory";
 
 /**
- * Marks an order refunded (fully or partially, based on comparing
- * `refundedAmountCents` to the order total) and records the amount.
- * Restocking only happens for a FULL refund of an order that hadn't shipped
- * yet — a partial refund could mean "discount" or "one item out of several,"
- * and without per-item refund allocation there's no reliable way to know
- * which units (if any) to put back. That's a deliberate MVP simplification;
- * this app supports one refund per order, not incremental partial refunds.
- * Idempotent: the `status in ('paid','shipped')` guard means calling this
- * again on an already-refunded order is a no-op, regardless of how many
- * times the admin action or the `charge.refunded` webhook fires.
+ * Marks an order refunded (fully or partially, based on comparing the
+ * cumulative `refundedAmountCents` to the order total) and records the
+ * amount. Supports multiple incremental partial refunds on the same order —
+ * the caller passes the running total refunded so far, not just this
+ * increment.
+ *
+ * Restocking only happens on the refund that brings the order to FULLY
+ * refunded, and only if the order never shipped — checked via the
+ * dedicated `has_shipped` flag rather than `status`, since `status` gets
+ * overwritten by refund states and would otherwise lose track of whether an
+ * order shipped once it's already partially refunded.
+ *
+ * Idempotent: the `status in (...)` guard means calling this again with the
+ * same cumulative amount (e.g. a redelivered webhook) is a no-op once the
+ * order has already reached that state.
  */
 export async function applyRefund(orderId: string, storeId: string, refundedAmountCents: number) {
   const client = await db.connect();
@@ -19,12 +24,12 @@ export async function applyRefund(orderId: string, storeId: string, refundedAmou
     await client.query("BEGIN");
 
     const { rows } = await client.query(
-      "select status, total_cents, line_items from orders where id = $1 and store_id = $2 for update",
+      "select status, total_cents, line_items, has_shipped from orders where id = $1 and store_id = $2 for update",
       [orderId, storeId]
     );
     const existing = rows[0];
 
-    if (!existing || !["paid", "shipped"].includes(existing.status)) {
+    if (!existing || !["paid", "shipped", "partially_refunded"].includes(existing.status)) {
       await client.query("ROLLBACK");
       return;
     }
@@ -38,7 +43,7 @@ export async function applyRefund(orderId: string, storeId: string, refundedAmou
       orderId,
     ]);
 
-    if (isFullRefund && existing.status === "paid") {
+    if (isFullRefund && !existing.has_shipped) {
       await releaseInventory(client, storeId, existing.line_items as LineItem[]);
     }
 

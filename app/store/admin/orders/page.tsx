@@ -145,7 +145,7 @@ export default async function OrdersPage({
               </div>
             )}
 
-            {(o.status === "paid" || o.status === "shipped") && (
+            {["paid", "shipped", "partially_refunded"].includes(o.status) && (
               <form
                 action={refundOrder}
                 style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}
@@ -157,8 +157,8 @@ export default async function OrdersPage({
                   type="number"
                   step="0.01"
                   min="0.01"
-                  max={(o.total_cents / 100).toFixed(2)}
-                  defaultValue={(o.total_cents / 100).toFixed(2)}
+                  max={((o.total_cents - o.refunded_amount_cents) / 100).toFixed(2)}
+                  defaultValue={((o.total_cents - o.refunded_amount_cents) / 100).toFixed(2)}
                   style={{ width: 90 }}
                 />
                 <RefundButton />

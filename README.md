@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–15
+# Store Platform — Phases 1–16
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -23,7 +23,7 @@ keep building.
 
 **Phase 9 — stale reservation sweep**
 
-**Phase 10 — partial refunds**
+**Phase 10 — partial refunds (single)**
 
 **Phase 11 — delivered status, net-of-refunds revenue**
 
@@ -34,18 +34,27 @@ keep building.
 **Phase 14 — platform admin + per-merchant fee tiers**
 
 **Phase 15 — structured country selection**
-- `lib/countries.ts` — checkout's country field is now a `<select>`, not
-  free text, so values are consistent in the database (previously "UAE",
-  "U.A.E", "United Arab Emirates" would each be a different stored string)
-- **Not exhaustive** — covers ~70 common countries weighted toward UAE/GCC/
-  South Asia to match a realistic customer base for this business, not the
-  full 195-country ISO list. It's a plain array in one file; extending it is
-  a one-line addition per country, but a customer outside the current list
-  can't select their country at checkout until you do. Worth knowing before
-  this goes live for a merchant with a genuinely global customer base
-- `getCountryName()` resolves the stored code back to a full name for
-  display on the confirmation page and in admin — city stays free text,
-  only country is structured
+
+**Phase 16 — incremental (multiple) partial refunds**
+- `refundOrder` now works off the **remaining refundable balance**
+  (`total_cents - refunded_amount_cents`), not the original order total —
+  an order can be refunded more than once, each time up to whatever's left
+- Every refund call to Stripe now passes an **explicit `amount`**, even
+  when refunding everything remaining. Previously the code omitted `amount`
+  to mean "full refund," which is fine for a first refund but ambiguous to
+  reason about once a prior partial refund already exists on the same
+  charge — being explicit removes that ambiguity entirely
+- **Bug fixed in the process**: restocking logic used to check
+  `status === 'paid'` to infer "this order never shipped." That breaks once
+  `status` has already moved to `partially_refunded` — a second refund on
+  an already-partially-refunded, never-shipped order would have silently
+  skipped restocking. Fixed with a dedicated `has_shipped` boolean
+  (`migrations/007_...sql`), set independently by `markShipped` and checked
+  by `applyRefund` regardless of how many refund states `status` has since
+  passed through
+- Restocking still only happens once — on whichever refund brings the order
+  to fully `refunded` — not per-increment, since per-item refund allocation
+  (which units a partial refund corresponds to) remains out of scope
 
 ## Setup
 
@@ -83,16 +92,16 @@ keep building.
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
-## What's next (beyond MVP, in rough priority order)
+## What's next (beyond MVP)
 
 - Expand `lib/countries.ts` toward the full ISO list if global customers
   become a reality
 - Carrier tracking integration (auto-transition shipped → delivered) —
   needs a decision on which carrier(s) to integrate first
-- Incremental multiple partial refunds per order
 
 ## Deliberately cut from MVP
 
 Custom domains, theme customization, apps marketplace, multi-currency,
 discount codes, customer accounts (guest checkout via email only), handling
-of actual returned physical goods after a post-shipment refund.
+of actual returned physical goods after a post-shipment refund, per-item
+refund allocation (and therefore per-item restocking on partial refunds).

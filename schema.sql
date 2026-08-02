@@ -44,6 +44,7 @@ create table if not exists orders (
   tracking_number text,
   inventory_reserved boolean not null default false,
   refunded_amount_cents int not null default 0,
+  has_shipped boolean not null default false,
   created_at timestamptz default now()
 );
 
