@@ -17,7 +17,7 @@ export default async function OrderConfirmationPage({ params }: { params: { id: 
   if (!store) return null;
 
   const { rows } = await db.query(
-    "select id, total_cents, status, customer_email, shipping_address, tracking_number from orders where id = $1 and store_id = $2",
+    "select id, total_cents, status, customer_email, shipping_address, tracking_number, carrier from orders where id = $1 and store_id = $2",
     [params.id, store.id]
   );
   const order = rows[0];
@@ -43,7 +43,8 @@ export default async function OrderConfirmationPage({ params }: { params: { id: 
 
       {order.status === "shipped" && (
         <p>
-          Shipped{order.tracking_number ? ` — tracking number: ${order.tracking_number}` : ""}.
+          Shipped{order.carrier ? ` via ${order.carrier === "aramex" ? "Aramex" : order.carrier === "emirates_post" ? "Emirates Post" : order.carrier}` : ""}
+          {order.tracking_number ? ` — tracking number: ${order.tracking_number}` : ""}.
         </p>
       )}
 

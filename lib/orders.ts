@@ -2,6 +2,19 @@ import { db } from "./db";
 import { releaseInventory, type LineItem } from "./inventory";
 
 /**
+ * Marks a shipped order delivered. Shared between the merchant-facing
+ * "Mark delivered" action and the AfterShip webhook, so an order can be
+ * confirmed delivered either manually or automatically once the carrier
+ * reports it.
+ */
+export async function markOrderDelivered(orderId: string, storeId: string) {
+  await db.query(
+    "update orders set status = 'delivered' where id = $1 and store_id = $2 and status = 'shipped'",
+    [orderId, storeId]
+  );
+}
+
+/**
  * Marks an order refunded (fully or partially, based on comparing the
  * cumulative `refundedAmountCents` to the order total) and records the
  * amount. Supports multiple incremental partial refunds on the same order —

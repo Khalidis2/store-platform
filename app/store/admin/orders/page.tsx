@@ -22,11 +22,19 @@ type Order = {
   line_items: LineItem[];
   shipping_address: ShippingAddress;
   tracking_number: string | null;
+  carrier: string | null;
   refunded_amount_cents: number;
   created_at: string;
 };
 
 const STATUSES = ["pending", "paid", "shipped", "delivered", "expired", "refunded", "partially_refunded"];
+
+function carrierLabel(carrier: string | null) {
+  if (carrier === "aramex") return "Aramex";
+  if (carrier === "emirates_post") return "Emirates Post";
+  if (carrier === "other") return "Other carrier";
+  return "Carrier";
+}
 
 function statusColor(status: string) {
   if (status === "paid") return "#a66";
@@ -120,13 +128,19 @@ export default async function OrdersPage({
 
             {o.status === "shipped" && o.tracking_number && (
               <div style={{ marginTop: "0.25rem", fontSize: "0.9rem" }}>
-                Tracking: {o.tracking_number}
+                {carrierLabel(o.carrier)} tracking: {o.tracking_number}
               </div>
             )}
 
             {o.status === "paid" && (
-              <form action={markShipped} style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <form action={markShipped} style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
                 <input type="hidden" name="orderId" value={o.id} />
+                <select name="carrier" defaultValue="">
+                  <option value="">Carrier (optional)</option>
+                  <option value="aramex">Aramex</option>
+                  <option value="emirates_post">Emirates Post</option>
+                  <option value="other">Other</option>
+                </select>
                 <input name="trackingNumber" placeholder="Tracking number (optional)" style={{ flex: 1 }} />
                 <button type="submit">Mark shipped</button>
               </form>
