@@ -1,8 +1,7 @@
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
-
-type LineItem = { productId: string; name: string; priceCents: number; quantity: number };
+import { releaseInventory, type LineItem } from "@/lib/inventory";
 
 export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
@@ -21,7 +20,23 @@ export async function POST(req: Request) {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.orderId;
       if (orderId) {
-        await markPaidAndDecrementInventory(orderId, session.payment_intent as string);
+        // Inventory was already reserved (decremented) when the Checkout
+        // Session was created — this just marks the order paid. The
+        // status = 'pending' guard keeps this idempotent against Stripe
+        // redelivering the same event.
+        await db.query(
+          "update orders set status = 'paid', stripe_payment_intent_id = $1 where id = $2 and status = 'pending'",
+          [session.payment_intent, orderId]
+        );
+      }
+      break;
+    }
+
+    case "checkout.session.expired": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orderId = session.metadata?.orderId;
+      if (orderId) {
+        await releaseExpiredReservation(orderId);
       }
       break;
     }
@@ -41,30 +56,25 @@ export async function POST(req: Request) {
   return Response.json({ received: true });
 }
 
-// Wrapped in a transaction, and gated on status = 'pending' in the UPDATE
-// itself, so this is safe to run more than once — Stripe can and does
-// redeliver webhook events, and without this guard a retry would decrement
-// inventory a second time for the same order.
-async function markPaidAndDecrementInventory(orderId: string, paymentIntentId: string) {
+// Releases inventory that was reserved but never paid for — a buyer who
+// abandons the Stripe payment page eventually triggers this, restoring the
+// stock rather than leaving it locked up indefinitely.
+async function releaseExpiredReservation(orderId: string) {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
 
     const { rows } = await client.query(
-      `update orders set status = 'paid', stripe_payment_intent_id = $1
-       where id = $2 and status = 'pending'
+      `update orders set status = 'expired'
+       where id = $1 and status = 'pending' and inventory_reserved = true
        returning store_id, line_items`,
-      [paymentIntentId, orderId]
+      [orderId]
     );
 
     if (rows.length > 0) {
       const { store_id, line_items } = rows[0] as { store_id: string; line_items: LineItem[] };
-      for (const item of line_items) {
-        await client.query(
-          "update products set inventory = greatest(inventory - $1, 0) where id = $2 and store_id = $3",
-          [item.quantity, item.productId, store_id]
-        );
-      }
+      await releaseInventory(client, store_id, line_items);
+      await client.query("update orders set inventory_reserved = false where id = $1", [orderId]);
     }
 
     await client.query("COMMIT");

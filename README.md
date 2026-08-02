@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–6
+# Store Platform — Phases 1–7
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -26,26 +26,35 @@ keep building.
   charge, platform fee via `PLATFORM_FEE_PERCENT`
 - `app/api/webhooks/stripe/route.ts` — root-domain webhook
 
-**Phase 5 — fulfillment loop**
-- Webhook decrements inventory when an order is marked paid, transactional
-  and idempotent against Stripe redelivering the same event
-- `app/store/admin/orders/` shows line items and (previously) a fulfillment
-  action — now superseded by Phase 6's shipping workflow
+**Phase 5 — fulfillment loop (order status, initial inventory handling)**
+- `app/store/admin/orders/` shows line items per order
 
 **Phase 6 — shipping address + shipped status**
-- Checkout now collects a real shipping address (name, phone, address,
-  city, country) — stored as `orders.shipping_address` (jsonb)
-- Order status flow is now `pending → paid → shipped`, with an optional
-  `tracking_number` captured when the merchant marks an order shipped
-  (`app/store/admin/orders/actions.ts`)
-- Order confirmation page shows the shipping address and tracking number
-  once available
-- Dashboard's "Needs shipping" count replaces the earlier generic
-  "fulfillment" count
+- Checkout collects a real shipping address, stored as `orders.shipping_address`
+- Order status flow: `pending → paid → shipped`, with `tracking_number`
 
-This closes the full loop: browse → cart → checkout (with shipping
-address) → real Stripe payment → merchant paid minus platform fee →
-inventory decremented → merchant ships with tracking.
+**Phase 7 — proper inventory reservation (closes the oversell gap)**
+- `lib/inventory.ts` — `reserveInventory` / `releaseInventory`, atomic via a
+  single `UPDATE ... WHERE inventory >= $quantity` per line item, so two
+  concurrent requests for the last unit of a product can't both succeed
+- Reservation now happens in `app/store/api/checkout/pay/route.ts`, at the
+  moment a Stripe Checkout Session is created — not on payment confirmation.
+  The order row is locked (`FOR UPDATE`) for the duration, so a double-click
+  on "Continue to payment" can't reserve stock twice
+- Checkout Sessions now expire in 31 minutes (Stripe's minimum is 30). The
+  webhook's new `checkout.session.expired` case releases the reservation and
+  marks the order `expired` if it was never paid
+- If Stripe's session-creation API call itself fails after stock was already
+  reserved, the route releases it immediately in the same request — it
+  doesn't rely solely on the expiry webhook for that specific failure mode
+- Order status set now includes `expired` alongside `pending` / `paid` / `shipped`
+
+**Known remaining gap**: this relies on Stripe reliably delivering the
+`checkout.session.expired` webhook. If that delivery is ever missed (rare,
+but Stripe doesn't guarantee zero failure), a reservation could stay locked
+until manually investigated. A periodic sweep job that releases reservations
+on `pending` orders older than the session expiry window would close this
+fully — not built here, flagged as the one remaining edge case.
 
 ## Setup
 
@@ -58,7 +67,10 @@ inventory decremented → merchant ships with tracking.
 5. `npm run dev`
 6. **Stripe webhook (local testing)**: install the Stripe CLI, run
    `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
-   signing secret it prints into `STRIPE_WEBHOOK_SECRET`
+   signing secret it prints into `STRIPE_WEBHOOK_SECRET`. Make sure
+   `checkout.session.expired` is included in the events you're listening for
+   (the CLI forwards all events by default; in the Dashboard you'll need to
+   add it explicitly to the webhook endpoint's event list)
 7. To test subdomain routing locally, add a hosts file entry, e.g.
    `127.0.0.1 teststore.localhost`, then visit
    `http://teststore.localhost:3000`
@@ -69,16 +81,18 @@ inventory decremented → merchant ships with tracking.
 - Add a wildcard domain (`*.yourapp.com`) in Vercel's domain settings
 - Set `DATABASE_URL`, the Supabase env vars, and `STRIPE_SECRET_KEY` in Vercel
 - Add a Stripe webhook endpoint at `https://yourapp.com/api/webhooks/stripe`
-  listening for `checkout.session.completed` and `account.updated`; copy its
-  signing secret into `STRIPE_WEBHOOK_SECRET` in Vercel
+  listening for `checkout.session.completed`, `checkout.session.expired`,
+  and `account.updated`; copy its signing secret into `STRIPE_WEBHOOK_SECRET`
+  in Vercel
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
 ## What's next (beyond MVP, in rough priority order)
 
-- Proper inventory reservation to fully close the oversell gap
-- Order status beyond shipped (delivered, cancelled, refunded)
+- Periodic sweep for `pending` orders older than the session expiry window,
+  as a backstop if a `checkout.session.expired` webhook is ever missed
 - Refunds/disputes handling
+- Order status beyond shipped (delivered, cancelled)
 - Password reset flow
 - Order search/filtering in admin
 - Per-merchant platform fee tiers

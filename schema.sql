@@ -33,6 +33,7 @@ create table if not exists orders (
   line_items jsonb not null default '[]'::jsonb,
   shipping_address jsonb not null default '{}'::jsonb,
   tracking_number text,
+  inventory_reserved boolean not null default false,
   created_at timestamptz default now()
 );
 

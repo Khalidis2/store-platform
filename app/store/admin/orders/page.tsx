@@ -26,6 +26,7 @@ type Order = {
 function statusColor(status: string) {
   if (status === "paid") return "#a66";
   if (status === "shipped") return "#2a2";
+  if (status === "expired") return "#bbb";
   return "#888";
 }
 
