@@ -122,6 +122,56 @@ keep building.
 - Verify AfterShip's exact webhook payload shape once real traffic flows,
   and tighten the defensive parsing in the webhook handler accordingly
 
+## Testing this end to end locally
+
+This has been built and pushed but never actually run against a live
+Supabase/Stripe test setup. Here's the concrete checklist to do that —
+written for whoever (likely Claude Code, in an environment that can
+actually run `npm run dev` and reach the network) picks this up next.
+
+**1. Supabase**
+- Create a free project at supabase.com
+- Project Settings → API: copy the Project URL and anon public key
+- Project Settings → Database: copy the connection string (`DATABASE_URL`)
+- SQL Editor: paste and run `schema.sql`
+- Authentication → URL Configuration: add `http://localhost:3000/**` as a
+  redirect URL
+
+**2. Stripe (test mode)**
+- Dashboard defaults to test mode — grab the test secret key
+  (`sk_test_...`) from Developers → API keys
+- Install the Stripe CLI, run
+  `stripe listen --forward-to localhost:3000/api/webhooks/stripe` — it
+  prints a webhook signing secret, that's `STRIPE_WEBHOOK_SECRET`
+
+**3. Local env**
+- `git clone` this repo, `npm install`
+- Copy `.env.example` → `.env.local`, fill in everything from steps 1–2
+- Generate `CRON_SECRET` with `openssl rand -hex 32`
+- AfterShip vars can stay blank for this pass — carrier tracking isn't
+  needed to validate the core flow
+- `npm run dev`
+
+**4. The actual walkthrough**
+- Sign up at `localhost:3000/signup`, create a store
+- In Supabase, add yourself to `platform_admins` (see
+  `migrations/006_phase14_platform_admin.sql`) so `/platform-admin` works
+- In store admin → settings, click "Connect Stripe" — Stripe's test mode
+  onboarding accepts fake business details, no real trade license needed
+  in test mode
+- Add a product, then buy it from the storefront using Stripe's test card
+  `4242 4242 4242 4242`, any future expiry, any CVC
+- Watch the order move through the full lifecycle: `pending` → `paid` →
+  mark shipped → mark delivered
+- Try a refund (full and partial) and confirm the Stripe dashboard (test
+  mode) reflects it
+- Try adding two items with limited stock and racing two checkouts against
+  the last unit, to sanity-check the inventory reservation logic actually
+  holds up outside of code review
+
+Nothing in this checklist has been run yet — treat the first pass through
+it as the real first test of this codebase, not a formality.
+
 ## Deliberately cut from MVP
 
 Custom domains, theme customization, apps marketplace, multi-currency,
