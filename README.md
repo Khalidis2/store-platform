@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–14
+# Store Platform — Phases 1–15
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -6,9 +6,6 @@ keep building.
 ## What's here
 
 **Phase 1 — tenancy foundation**
-- `schema.sql` — stores / products / orders, all tenant-scoped via `store_id`
-- `middleware.ts` — resolves `{subdomain}.yourapp.com`, covers API routes too
-- `lib/get-store.ts` — the tenant-resolution boundary
 
 **Phase 2 — admin dashboard (Supabase Auth)**
 
@@ -35,20 +32,20 @@ keep building.
 **Phase 13 — order search/filtering**
 
 **Phase 14 — platform admin + per-merchant fee tiers**
-- `platform_admins` table — a genuinely separate access-control boundary
-  from merchant store ownership. No self-service way to join it; you grant
-  yourself access with a direct SQL insert (see `migrations/006_...sql` for
-  the exact command) after creating a Supabase Auth user for yourself
-- `app/platform-admin/` — root-domain-only routes (not tenant-scoped, since
-  a platform admin oversees every store). Login, layout guard
-  (`lib/platform-admin.ts`), and a dashboard listing every store with an
-  editable fee percent
-- `updateStoreFee` re-checks platform-admin membership itself rather than
-  trusting the layout guard alone — it's changing another business's
-  revenue split, worth the extra query
-- `stores.platform_fee_percent` — nullable; blank falls back to
-  `DEFAULT_PLATFORM_FEE_PERCENT` in `app/store/api/checkout/pay/route.ts`.
-  Checkout now reads the per-store value when set
+
+**Phase 15 — structured country selection**
+- `lib/countries.ts` — checkout's country field is now a `<select>`, not
+  free text, so values are consistent in the database (previously "UAE",
+  "U.A.E", "United Arab Emirates" would each be a different stored string)
+- **Not exhaustive** — covers ~70 common countries weighted toward UAE/GCC/
+  South Asia to match a realistic customer base for this business, not the
+  full 195-country ISO list. It's a plain array in one file; extending it is
+  a one-line addition per country, but a customer outside the current list
+  can't select their country at checkout until you do. Worth knowing before
+  this goes live for a merchant with a genuinely global customer base
+- `getCountryName()` resolves the stored code back to a full name for
+  display on the confirmation page and in admin — city stays free text,
+  only country is structured
 
 ## Setup
 
@@ -60,9 +57,8 @@ keep building.
    `migrations/` in order, if upgrading an existing DB)
 5. In Supabase Auth → URL Configuration, add a wildcard redirect URL for
    your domain (needed for password reset across subdomains)
-6. Sign up as a merchant (or create a Supabase Auth user any way you like)
-   for yourself, then grant yourself platform-admin access — see the
-   comment at the bottom of `migrations/006_phase14_platform_admin.sql`
+6. Sign up as a merchant for yourself, then grant yourself platform-admin
+   access — see `migrations/006_phase14_platform_admin.sql`
 7. `npm run dev`
 8. **Stripe webhook (local testing)**: install the Stripe CLI, run
    `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
@@ -82,15 +78,17 @@ keep building.
   `charge.refunded`, and `account.updated`; copy its signing secret into
   `STRIPE_WEBHOOK_SECRET` in Vercel
 - In Supabase, add the wildcard redirect URL for password reset
-- Grant yourself platform-admin access via SQL (Phase 14)
+- Grant yourself platform-admin access via SQL
 - `vercel.json`'s cron entry deploys automatically with the project
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
 ## What's next (beyond MVP, in rough priority order)
 
-- Address validation / structured country-state selects instead of free text
-- Carrier tracking integration (auto-transition shipped → delivered)
+- Expand `lib/countries.ts` toward the full ISO list if global customers
+  become a reality
+- Carrier tracking integration (auto-transition shipped → delivered) —
+  needs a decision on which carrier(s) to integrate first
 - Incremental multiple partial refunds per order
 
 ## Deliberately cut from MVP

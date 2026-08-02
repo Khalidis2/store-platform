@@ -2,6 +2,7 @@ import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
 import { markShipped, markDelivered, refundOrder } from "./actions";
 import RefundButton from "./RefundButton";
+import { getCountryName } from "@/lib/countries";
 
 type LineItem = { productId: string; name: string; priceCents: number; quantity: number };
 type ShippingAddress = {
@@ -113,7 +114,7 @@ export default async function OrdersPage({
               <div style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
                 <strong>Ship to:</strong> {o.shipping_address.fullName}, {o.shipping_address.addressLine1}
                 {o.shipping_address.addressLine2 ? `, ${o.shipping_address.addressLine2}` : ""},{" "}
-                {o.shipping_address.city}, {o.shipping_address.country} — {o.shipping_address.phone}
+                {o.shipping_address.city}, {getCountryName(o.shipping_address.country || "")} — {o.shipping_address.phone}
               </div>
             )}
 

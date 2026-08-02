@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
+import { getCountryName } from "@/lib/countries";
 
 type ShippingAddress = {
   fullName?: string;
@@ -55,7 +56,7 @@ export default async function OrderConfirmationPage({ params }: { params: { id: 
           <div>{shipping.addressLine1}</div>
           {shipping.addressLine2 && <div>{shipping.addressLine2}</div>}
           <div>
-            {shipping.city}, {shipping.country}
+            {shipping.city}, {getCountryName(shipping.country || "")}
           </div>
           <div>{shipping.phone}</div>
         </div>

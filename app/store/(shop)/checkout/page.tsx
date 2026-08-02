@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useCart } from "@/lib/cart-context";
 import { useStoreInfo } from "@/lib/store-context";
+import { COUNTRIES } from "@/lib/countries";
 
 export default function CheckoutPage() {
   const { items, subtotalCents, clear } = useCart();
@@ -100,7 +101,13 @@ export default function CheckoutPage() {
         />
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <input placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} required style={{ flex: 1 }} />
-          <input placeholder="Country" value={country} onChange={(e) => setCountry(e.target.value)} required style={{ width: 80 }} />
+          <select value={country} onChange={(e) => setCountry(e.target.value)} required style={{ width: 160 }}>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <p>Subtotal: AED {(subtotalCents / 100).toFixed(2)}</p>
