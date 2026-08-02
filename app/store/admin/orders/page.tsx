@@ -25,6 +25,8 @@ type Order = {
   created_at: string;
 };
 
+const STATUSES = ["pending", "paid", "shipped", "delivered", "expired", "refunded", "partially_refunded"];
+
 function statusColor(status: string) {
   if (status === "paid") return "#a66";
   if (status === "shipped") return "#2a2";
@@ -35,19 +37,53 @@ function statusColor(status: string) {
   return "#888";
 }
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: { status?: string; email?: string };
+}) {
   const store = await getCurrentStore();
   if (!store) return null;
 
+  const status = searchParams.status || "";
+  const email = searchParams.email || "";
+
+  const conditions = ["store_id = $1"];
+  const params: unknown[] = [store.id];
+
+  if (status) {
+    params.push(status);
+    conditions.push(`status = $${params.length}`);
+  }
+  if (email) {
+    params.push(`%${email}%`);
+    conditions.push(`customer_email ilike $${params.length}`);
+  }
+
   const { rows: orders } = await db.query<Order>(
-    "select * from orders where store_id = $1 order by created_at desc",
-    [store.id]
+    `select * from orders where ${conditions.join(" and ")} order by created_at desc`,
+    params
   );
 
   return (
     <main>
       <h1>Orders</h1>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1rem" }}>
+
+      <form method="get" style={{ display: "flex", gap: "0.5rem", margin: "1rem 0", flexWrap: "wrap", alignItems: "center" }}>
+        <select name="status" defaultValue={status}>
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s.replace("_", " ")}
+            </option>
+          ))}
+        </select>
+        <input name="email" placeholder="Search by email" defaultValue={email} />
+        <button type="submit">Filter</button>
+        {(status || email) && <a href="/admin/orders">Clear</a>}
+      </form>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {orders.map((o) => (
           <div key={o.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: "1rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -59,7 +95,9 @@ export default async function OrdersPage() {
               </div>
               <div style={{ textAlign: "right" }}>
                 <div>AED {(o.total_cents / 100).toFixed(2)}</div>
-                <div style={{ textTransform: "capitalize", color: statusColor(o.status) }}>{o.status}</div>
+                <div style={{ textTransform: "capitalize", color: statusColor(o.status) }}>
+                  {o.status.replace("_", " ")}
+                </div>
               </div>
             </div>
 
@@ -127,7 +165,9 @@ export default async function OrdersPage() {
             )}
           </div>
         ))}
-        {orders.length === 0 && <p style={{ color: "#666" }}>No orders yet.</p>}
+        {orders.length === 0 && (
+          <p style={{ color: "#666" }}>{status || email ? "No orders match this filter." : "No orders yet."}</p>
+        )}
       </div>
     </main>
   );

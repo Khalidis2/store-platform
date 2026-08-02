@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–12
+# Store Platform — Phases 1–13
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -11,8 +11,6 @@ keep building.
 - `lib/get-store.ts` — the tenant-resolution boundary
 
 **Phase 2 — admin dashboard (Supabase Auth)**
-- `app/signup/page.tsx`, `app/store/login/page.tsx` — account + store
-  creation, login
 
 **Phase 3 — real storefront, cart, checkout**
 
@@ -33,18 +31,12 @@ keep building.
 **Phase 11 — delivered status, net-of-refunds revenue**
 
 **Phase 12 — password reset**
-- `app/store/forgot-password/page.tsx` — requests a reset link via Supabase
-  Auth, redirecting back to the store's **own subdomain** (not a generic
-  root URL — login only makes sense in the context of a specific store)
-- `app/store/reset-password/page.tsx` — the browser client auto-detects the
-  recovery token from the email link's URL fragment and establishes a
-  session, so setting the new password is a plain `updateUser()` call
-- **Deployment gotcha**: Supabase requires redirect URLs to be explicitly
-  allow-listed per project (Authentication → URL Configuration). Since every
-  merchant has a different subdomain, you need a **wildcard** entry there —
-  something like `https://*.yourapp.com/reset-password` — or reset links
-  will fail for every subdomain except whichever one you happened to test
-  with first
+
+**Phase 13 — order search/filtering**
+- `app/store/admin/orders/page.tsx` now reads `searchParams` (`status`,
+  `email`) and builds the WHERE clause dynamically. Server-rendered plain
+  GET form — no client JS, consistent with the rest of the admin — so
+  filters are shareable/bookmarkable URLs like `/admin/orders?status=paid`
 
 ## Setup
 
@@ -55,8 +47,7 @@ keep building.
 4. Run `schema.sql` against the database (or run the migrations in
    `migrations/` in order, if upgrading an existing DB)
 5. In Supabase Auth → URL Configuration, add a wildcard redirect URL for
-   your domain (see Phase 12 above) — needed for password reset to work
-   across subdomains
+   your domain (needed for password reset across subdomains)
 6. `npm run dev`
 7. **Stripe webhook (local testing)**: install the Stripe CLI, run
    `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
@@ -75,14 +66,13 @@ keep building.
   listening for `checkout.session.completed`, `checkout.session.expired`,
   `charge.refunded`, and `account.updated`; copy its signing secret into
   `STRIPE_WEBHOOK_SECRET` in Vercel
-- In Supabase, add the wildcard redirect URL for password reset (Phase 12)
+- In Supabase, add the wildcard redirect URL for password reset
 - `vercel.json`'s cron entry deploys automatically with the project
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
 ## What's next (beyond MVP, in rough priority order)
 
-- Order search/filtering in admin
 - Per-merchant platform fee tiers
 - Address validation / structured country-state selects instead of free text
 - Carrier tracking integration (auto-transition shipped → delivered)
