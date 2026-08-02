@@ -8,7 +8,9 @@ export default function Home() {
         <code>&#123;subdomain&#125;.yourapp.com</code>, resolved by{" "}
         <code>middleware.ts</code> and rendered by <code>app/store/page.tsx</code>.
       </p>
-      <p>Next: build the actual signup form here that POSTs to <code>/api/stores</code>.</p>
+      <p>
+        <a href="/signup">Create a store →</a>
+      </p>
     </main>
   );
 }

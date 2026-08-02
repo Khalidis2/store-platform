@@ -1,9 +1,22 @@
 import { db } from "@/lib/db";
+import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function POST(req: Request) {
-  const { subdomain, name, ownerUserId } = await req.json();
+  const supabase = getSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!subdomain || !name || !ownerUserId) {
+  // owner_user_id must come from the verified session, never from the
+  // request body — otherwise anyone could POST an arbitrary owner id and
+  // claim a store they don't control.
+  if (!user) {
+    return Response.json({ error: "Must be signed in to create a store" }, { status: 401 });
+  }
+
+  const { subdomain, name } = await req.json();
+
+  if (!subdomain || !name) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -28,7 +41,7 @@ export async function POST(req: Request) {
   const result = await db.query(
     `insert into stores (subdomain, name, owner_user_id)
      values ($1, $2, $3) returning *`,
-    [clean, name, ownerUserId]
+    [clean, name, user.id]
   );
 
   return Response.json(result.rows[0], { status: 201 });
