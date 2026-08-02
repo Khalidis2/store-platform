@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Update this to your real root domain once you have one.
-const ROOT_DOMAINS = ["localhost:3000", "yourapp.com", "www.yourapp.com"];
+import { ROOT_DOMAINS, extractSubdomain } from "./lib/subdomain";
 
 export function middleware(req: NextRequest) {
   const hostname = req.headers.get("host") || "";
+  const subdomain = extractSubdomain(hostname);
 
   // Root domain (marketing site / merchant signup) — no store context.
-  if (ROOT_DOMAINS.includes(hostname)) {
+  if (!subdomain) {
     return NextResponse.next();
   }
-
-  // e.g. "khaledsstore.yourapp.com" -> "khaledsstore"
-  const subdomain = hostname.split(".")[0];
 
   const url = req.nextUrl.clone();
   url.pathname = `/store${url.pathname}`;
@@ -23,5 +19,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

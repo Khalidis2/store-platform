@@ -30,6 +30,7 @@ create table if not exists orders (
   total_cents int not null,
   status text default 'pending',
   stripe_payment_intent_id text,
+  line_items jsonb not null default '[]'::jsonb,
   created_at timestamptz default now()
 );
 

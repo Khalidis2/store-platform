@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { db } from "./db";
+import { extractSubdomain } from "./subdomain";
 
 export type Store = {
   id: string;
@@ -12,13 +13,16 @@ export type Store = {
 };
 
 /**
- * Resolves the current tenant from the subdomain set by middleware.ts.
- * Every store-scoped page or API route should call this first, then
- * filter all subsequent queries by store.id. This function is the
- * entire tenant-isolation boundary — treat it as load-bearing.
+ * Resolves the current tenant. Prefers the x-store-subdomain header set by
+ * middleware.ts, falling back to parsing the Host header directly — this
+ * fallback is what lets API routes resolve tenant context correctly too.
+ * Every store-scoped page or route should call this first, then filter all
+ * subsequent queries by store.id. This function is the entire
+ * tenant-isolation boundary — treat it as load-bearing.
  */
 export async function getCurrentStore(): Promise<Store | null> {
-  const subdomain = headers().get("x-store-subdomain");
+  const h = headers();
+  const subdomain = h.get("x-store-subdomain") ?? extractSubdomain(h.get("host") ?? "");
   if (!subdomain) return null;
 
   const result = await db.query<Store>(
