@@ -40,3 +40,51 @@ export async function applyRefund(orderId: string, storeId: string) {
     client.release();
   }
 }
+
+/**
+ * Backstop for the (rare, but non-zero) case where Stripe's
+ * `checkout.session.expired` webhook is never delivered — without this, a
+ * reservation from an abandoned checkout would stay locked indefinitely.
+ * Finds `pending` orders with reserved stock older than `maxAgeMinutes`
+ * (should be comfortably longer than the Checkout Session expiry window)
+ * and releases each one. Returns how many were released, for logging.
+ */
+export async function releaseStaleReservations(maxAgeMinutes: number): Promise<number> {
+  const { rows: staleOrders } = await db.query(
+    `select id, store_id from orders
+     where status = 'pending'
+       and inventory_reserved = true
+       and created_at < now() - ($1 || ' minutes')::interval`,
+    [maxAgeMinutes]
+  );
+
+  let released = 0;
+  for (const order of staleOrders) {
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+
+      const { rows } = await client.query(
+        `update orders set status = 'expired'
+         where id = $1 and status = 'pending' and inventory_reserved = true
+         returning line_items`,
+        [order.id]
+      );
+
+      if (rows.length > 0) {
+        await releaseInventory(client, order.store_id, rows[0].line_items as LineItem[]);
+        await client.query("update orders set inventory_reserved = false where id = $1", [order.id]);
+        released++;
+      }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  return released;
+}
