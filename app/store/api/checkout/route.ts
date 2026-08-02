@@ -15,22 +15,34 @@ export async function POST(req: Request) {
     return Response.json({ error: "Email and at least one item are required" }, { status: 400 });
   }
 
-  // Re-fetch authoritative prices from the DB rather than trusting whatever
-  // the client sent — a tampered request could otherwise set its own prices.
+  // Re-fetch authoritative prices (and current stock) from the DB rather
+  // than trusting whatever the client sent.
   const productIds = items.map((i) => i.productId);
   const { rows: products } = await db.query(
-    "select id, name, price_cents from products where store_id = $1 and id = any($2)",
+    "select id, name, price_cents, inventory from products where store_id = $1 and id = any($2)",
     [store.id, productIds]
   );
 
-  const priceMap = new Map(products.map((p: any) => [p.id, p]));
+  const productMap = new Map(products.map((p: any) => [p.id, p]));
   let totalCents = 0;
   const lineItems: { productId: string; name: string; priceCents: number; quantity: number }[] = [];
 
   for (const item of items) {
-    const product = priceMap.get(item.productId);
+    const product = productMap.get(item.productId);
     if (!product) continue; // product no longer exists — skip rather than fail the whole order
+
     const quantity = Math.max(1, Number(item.quantity) || 1);
+
+    // Basic stock check at order time. This doesn't fully prevent overselling
+    // under concurrent checkouts (that needs proper inventory reservation,
+    // deliberately out of MVP scope) — it just stops the obvious case.
+    if (quantity > product.inventory) {
+      return Response.json(
+        { error: `Only ${product.inventory} of "${product.name}" left in stock` },
+        { status: 409 }
+      );
+    }
+
     totalCents += product.price_cents * quantity;
     lineItems.push({
       productId: product.id,
