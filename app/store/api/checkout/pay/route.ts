@@ -4,7 +4,9 @@ import { stripe } from "@/lib/stripe";
 import { getBaseUrl } from "@/lib/get-base-url";
 import { reserveInventory, releaseInventory, InsufficientStockError, type LineItem } from "@/lib/inventory";
 
-const PLATFORM_FEE_PERCENT = 5;
+// Falls back to this if a store doesn't have platform_fee_percent set —
+// see the platform admin panel (app/platform-admin/) to override per store.
+const DEFAULT_PLATFORM_FEE_PERCENT = 5;
 // Stripe requires Checkout Session expiry between 30 minutes and 24 hours
 // from creation. Kept short so abandoned reservations release quickly.
 const SESSION_EXPIRY_MINUTES = 31;
@@ -64,7 +66,8 @@ export async function POST(req: Request) {
   }
 
   const lineItems = order.line_items as LineItem[];
-  const applicationFeeAmount = Math.round(order.total_cents * (PLATFORM_FEE_PERCENT / 100));
+  const feePercent = store.platform_fee_percent ?? DEFAULT_PLATFORM_FEE_PERCENT;
+  const applicationFeeAmount = Math.round(order.total_cents * (feePercent / 100));
   const baseUrl = getBaseUrl();
 
   try {

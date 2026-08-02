@@ -10,6 +10,15 @@ create table if not exists stores (
   owner_user_id uuid not null,
   stripe_account_id text,
   is_live boolean default false,
+  platform_fee_percent numeric(5,2),
+  created_at timestamptz default now()
+);
+
+-- Not a role flag on the stores/users table by design — platform-admin
+-- access is deliberately a separate table with no self-service way to join
+-- it, since it controls other merchants' fee rates.
+create table if not exists platform_admins (
+  user_id uuid primary key,
   created_at timestamptz default now()
 );
 

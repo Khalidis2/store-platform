@@ -9,6 +9,7 @@ export type Store = {
   owner_user_id: string;
   stripe_account_id: string | null;
   is_live: boolean;
+  platform_fee_percent: number | null;
   created_at: string;
 };
 
