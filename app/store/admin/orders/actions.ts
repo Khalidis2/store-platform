@@ -21,6 +21,20 @@ export async function markShipped(formData: FormData) {
   revalidatePath("/admin/orders");
 }
 
+export async function markDelivered(formData: FormData) {
+  const store = await getCurrentStore();
+  if (!store) throw new Error("No store context");
+
+  const orderId = String(formData.get("orderId"));
+
+  await db.query(
+    "update orders set status = 'delivered' where id = $1 and store_id = $2 and status = 'shipped'",
+    [orderId, store.id]
+  );
+
+  revalidatePath("/admin/orders");
+}
+
 export async function refundOrder(formData: FormData) {
   const store = await getCurrentStore();
   if (!store) throw new Error("No store context");

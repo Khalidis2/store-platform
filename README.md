@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–10
+# Store Platform — Phases 1–11
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -29,37 +29,36 @@ keep building.
 **Phase 5 — fulfillment loop (order status, initial inventory handling)**
 
 **Phase 6 — shipping address + shipped status**
-- Checkout collects a real shipping address, stored as `orders.shipping_address`
-- Order status flow: `pending → paid → shipped`, with `tracking_number`
+- Checkout collects a real shipping address; order flow `pending → paid → shipped`
 
 **Phase 7 — proper inventory reservation**
-- `lib/inventory.ts` — atomic reserve/release, race-safe under concurrent
-  checkouts
+- `lib/inventory.ts` — atomic reserve/release, race-safe under concurrent checkouts
 
 **Phase 8 — refunds**
 - `lib/orders.ts` (`applyRefund`) — reverses payout + platform fee via Stripe
 
 **Phase 9 — stale reservation sweep**
-- `app/api/cron/release-stale-reservations/route.ts` + Vercel daily cron +
-  optional GitHub Actions 15-minute workflow
+- Vercel daily cron + optional GitHub Actions 15-minute workflow
 
 **Phase 10 — partial refunds**
-- `refundOrder` now accepts an editable amount (defaults to the full order
-  total). Passing a smaller `amount` to Stripe's refund API automatically
-  prorates the application fee refund too (confirmed current Stripe
-  behavior — this wasn't always the case, worth knowing if you're reading
-  older Stripe blog posts)
-- New status: `partially_refunded`, alongside `refunded`. `refunded_amount_cents`
-  tracks how much came back, shown in the admin order list
-- **Deliberate scope limit**: this app supports exactly **one refund per
-  order** (full or partial), not incremental multiple partial refunds on the
-  same order. Restocking only happens on a full refund of an order that
-  hadn't shipped — a partial refund doesn't restock anything, since without
-  per-item refund allocation there's no reliable way to know which units (if
-  any) it corresponds to
-- Webhook's `charge.refunded` case now passes Stripe's own
-  `charge.amount_refunded` (cumulative, authoritative) rather than assuming
-  a full refund
+- Editable refund amount, `partially_refunded` status, `refunded_amount_cents`
+  tracking. One refund per order (full or partial), no incremental multiples
+
+**Phase 11 — delivered status, accurate net revenue**
+- Order lifecycle now goes `pending → paid → shipped → delivered`.
+  `markDelivered` (`app/store/admin/orders/actions.ts`) is a manual,
+  merchant-marked transition — there's no carrier-tracking integration doing
+  this automatically, which is a real gap if you want it eventually, but a
+  whole separate integration project, not attempted here
+- Refunds remain available for `paid` and `shipped` orders, but **not**
+  `delivered` — once a merchant confirms delivery, further recourse is a
+  proper returns process, explicitly out of scope
+- **Revenue calculation fixed**: previously summed the full `total_cents` of
+  every paid/shipped order, which overstated revenue on any partially
+  refunded order. Now computes `total_cents - refunded_amount_cents` across
+  all post-payment statuses (including fully `refunded`, which nets to zero
+  automatically since `refunded_amount_cents` equals the total there) —
+  dashboard now shows true net revenue, not gross
 
 ## Setup
 
@@ -67,7 +66,6 @@ keep building.
 2. Create a Supabase project (Postgres + Auth)
 3. Copy `.env.example` to `.env.local`, fill in `DATABASE_URL`, the two
    `NEXT_PUBLIC_SUPABASE_*` values, `STRIPE_SECRET_KEY`, and `CRON_SECRET`
-   (generate with `openssl rand -hex 32`)
 4. Run `schema.sql` against the database (or run the migrations in
    `migrations/` in order, if upgrading an existing DB)
 5. `npm run dev`
@@ -89,20 +87,17 @@ keep building.
   `charge.refunded`, and `account.updated`; copy its signing secret into
   `STRIPE_WEBHOOK_SECRET` in Vercel
 - `vercel.json`'s cron entry deploys automatically with the project
-- If using the GitHub Actions sweep too, set `CRON_SECRET` (secret) and
-  `APP_DOMAIN` (variable) in the GitHub repo
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
 ## What's next (beyond MVP, in rough priority order)
 
-- Incremental multiple partial refunds per order (currently one refund, full
-  or partial, per order)
-- Order status beyond shipped (delivered, cancelled pre-shipment by merchant)
 - Password reset flow
 - Order search/filtering in admin
 - Per-merchant platform fee tiers
 - Address validation / structured country-state selects instead of free text
+- Carrier tracking integration (auto-transition shipped → delivered)
+- Incremental multiple partial refunds per order
 
 ## Deliberately cut from MVP
 

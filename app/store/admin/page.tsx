@@ -12,7 +12,10 @@ export default async function AdminHome() {
        (select count(*) from products where store_id = $1) as product_count,
        (select count(*) from orders where store_id = $1) as order_count,
        (select count(*) from orders where store_id = $1 and status = 'paid') as needs_shipping,
-       (select coalesce(sum(total_cents), 0) from orders where store_id = $1 and status in ('paid', 'shipped')) as revenue_cents`,
+       (select coalesce(sum(total_cents - refunded_amount_cents), 0)
+        from orders
+        where store_id = $1
+          and status in ('paid', 'shipped', 'delivered', 'refunded', 'partially_refunded')) as revenue_cents`,
     [store.id]
   );
 
@@ -36,7 +39,7 @@ export default async function AdminHome() {
         </div>
         <div>
           <strong style={{ fontSize: "1.5rem" }}>AED {(counts.revenue_cents / 100).toFixed(2)}</strong>
-          <div style={{ color: "#666" }}>Revenue (paid + fulfilled)</div>
+          <div style={{ color: "#666" }}>Revenue (net of refunds)</div>
         </div>
       </div>
     </main>

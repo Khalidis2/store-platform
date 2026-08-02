@@ -31,7 +31,7 @@ export default async function OrderConfirmationPage({ params }: { params: { id: 
         Order #{order.id.slice(0, 8)} — AED {(order.total_cents / 100).toFixed(2)}
       </p>
 
-      {order.status === "paid" || order.status === "shipped" ? (
+      {["paid", "shipped", "delivered"].includes(order.status) ? (
         <p style={{ color: "#2a2" }}>Thank you! A confirmation has been sent to {order.customer_email}.</p>
       ) : (
         <p style={{ color: "#666" }}>
@@ -45,6 +45,8 @@ export default async function OrderConfirmationPage({ params }: { params: { id: 
           Shipped{order.tracking_number ? ` — tracking number: ${order.tracking_number}` : ""}.
         </p>
       )}
+
+      {order.status === "delivered" && <p style={{ color: "#06c" }}>Delivered.</p>}
 
       {shipping?.addressLine1 && (
         <div style={{ marginTop: "1rem", color: "#666" }}>
