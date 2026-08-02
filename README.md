@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–9
+# Store Platform — Phases 1–10
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -34,30 +34,32 @@ keep building.
 
 **Phase 7 — proper inventory reservation**
 - `lib/inventory.ts` — atomic reserve/release, race-safe under concurrent
-  checkouts. Reservation happens when a Checkout Session is created, released
-  automatically if the session expires unpaid (`checkout.session.expired`)
+  checkouts
 
 **Phase 8 — refunds**
-- `lib/orders.ts` (`applyRefund`) — reverses both the merchant payout and the
-  platform fee via Stripe, conditionally restocks (only if not yet shipped),
-  idempotent, catches refunds issued from the Stripe dashboard too
+- `lib/orders.ts` (`applyRefund`) — reverses payout + platform fee via Stripe
 
 **Phase 9 — stale reservation sweep**
-- `lib/orders.ts` (`releaseStaleReservations`) — backstop for the rare case
-  where a `checkout.session.expired` webhook is never delivered. Finds
-  `pending` orders with reserved stock older than 45 minutes (comfortably
-  past the 31-minute session expiry) and releases them
-- `app/api/cron/release-stale-reservations/route.ts` — the endpoint,
-  protected by a `CRON_SECRET` bearer token
-- `vercel.json` — a daily Vercel Cron entry. **Vercel's Hobby plan only
-  allows cron jobs to run once per day** — this is a weak backstop on its
-  own given the 45-minute staleness window, but works without a paid plan
-- `.github/workflows/release-stale-reservations.yml` — a GitHub Actions
-  workflow running every 15 minutes for real coverage, same pattern as your
-  existing news bot. Needs two things set in the GitHub repo: a `CRON_SECRET`
-  **secret** (same value as in Vercel) and an `APP_DOMAIN` **variable** (e.g.
-  `yourapp.com`) — Settings → Secrets and variables → Actions
-- Either scheduler, or both together, works — they call the same endpoint
+- `app/api/cron/release-stale-reservations/route.ts` + Vercel daily cron +
+  optional GitHub Actions 15-minute workflow
+
+**Phase 10 — partial refunds**
+- `refundOrder` now accepts an editable amount (defaults to the full order
+  total). Passing a smaller `amount` to Stripe's refund API automatically
+  prorates the application fee refund too (confirmed current Stripe
+  behavior — this wasn't always the case, worth knowing if you're reading
+  older Stripe blog posts)
+- New status: `partially_refunded`, alongside `refunded`. `refunded_amount_cents`
+  tracks how much came back, shown in the admin order list
+- **Deliberate scope limit**: this app supports exactly **one refund per
+  order** (full or partial), not incremental multiple partial refunds on the
+  same order. Restocking only happens on a full refund of an order that
+  hadn't shipped — a partial refund doesn't restock anything, since without
+  per-item refund allocation there's no reliable way to know which units (if
+  any) it corresponds to
+- Webhook's `charge.refunded` case now passes Stripe's own
+  `charge.amount_refunded` (cumulative, authoritative) rather than assuming
+  a full refund
 
 ## Setup
 
@@ -87,14 +89,15 @@ keep building.
   `charge.refunded`, and `account.updated`; copy its signing secret into
   `STRIPE_WEBHOOK_SECRET` in Vercel
 - `vercel.json`'s cron entry deploys automatically with the project
-- If using the GitHub Actions sweep too, set the `CRON_SECRET` secret and
-  `APP_DOMAIN` variable in the GitHub repo (see Phase 9 above)
+- If using the GitHub Actions sweep too, set `CRON_SECRET` (secret) and
+  `APP_DOMAIN` (variable) in the GitHub repo
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
 ## What's next (beyond MVP, in rough priority order)
 
-- Partial refunds (currently full-refund only)
+- Incremental multiple partial refunds per order (currently one refund, full
+  or partial, per order)
 - Order status beyond shipped (delivered, cancelled pre-shipment by merchant)
 - Password reset flow
 - Order search/filtering in admin

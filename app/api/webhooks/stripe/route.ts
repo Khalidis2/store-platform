@@ -53,7 +53,7 @@ export async function POST(req: Request) {
         );
         const order = rows[0];
         if (order) {
-          await applyRefund(order.id, order.store_id);
+          await applyRefund(order.id, order.store_id, charge.amount_refunded);
         }
       }
       break;

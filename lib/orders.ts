@@ -2,21 +2,24 @@ import { db } from "./db";
 import { releaseInventory, type LineItem } from "./inventory";
 
 /**
- * Marks an order refunded. Restores inventory only if the order hadn't
- * shipped yet — once shipped, restocking is a manual merchant decision
- * (the item has physically left; handling actual returns is out of scope
- * here). Idempotent: calling this again on an already-refunded order is a
- * no-op, which matters because both the admin refund action and the
- * `charge.refunded` webhook call this, and either could fire more than once
- * for the same order.
+ * Marks an order refunded (fully or partially, based on comparing
+ * `refundedAmountCents` to the order total) and records the amount.
+ * Restocking only happens for a FULL refund of an order that hadn't shipped
+ * yet — a partial refund could mean "discount" or "one item out of several,"
+ * and without per-item refund allocation there's no reliable way to know
+ * which units (if any) to put back. That's a deliberate MVP simplification;
+ * this app supports one refund per order, not incremental partial refunds.
+ * Idempotent: the `status in ('paid','shipped')` guard means calling this
+ * again on an already-refunded order is a no-op, regardless of how many
+ * times the admin action or the `charge.refunded` webhook fires.
  */
-export async function applyRefund(orderId: string, storeId: string) {
+export async function applyRefund(orderId: string, storeId: string, refundedAmountCents: number) {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
 
     const { rows } = await client.query(
-      "select status, line_items from orders where id = $1 and store_id = $2 for update",
+      "select status, total_cents, line_items from orders where id = $1 and store_id = $2 for update",
       [orderId, storeId]
     );
     const existing = rows[0];
@@ -26,9 +29,16 @@ export async function applyRefund(orderId: string, storeId: string) {
       return;
     }
 
-    await client.query("update orders set status = 'refunded' where id = $1", [orderId]);
+    const isFullRefund = refundedAmountCents >= existing.total_cents;
+    const newStatus = isFullRefund ? "refunded" : "partially_refunded";
 
-    if (existing.status === "paid") {
+    await client.query("update orders set status = $1, refunded_amount_cents = $2 where id = $3", [
+      newStatus,
+      refundedAmountCents,
+      orderId,
+    ]);
+
+    if (isFullRefund && existing.status === "paid") {
       await releaseInventory(client, storeId, existing.line_items as LineItem[]);
     }
 

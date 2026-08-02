@@ -21,6 +21,7 @@ type Order = {
   line_items: LineItem[];
   shipping_address: ShippingAddress;
   tracking_number: string | null;
+  refunded_amount_cents: number;
   created_at: string;
 };
 
@@ -29,6 +30,7 @@ function statusColor(status: string) {
   if (status === "shipped") return "#2a2";
   if (status === "expired") return "#bbb";
   if (status === "refunded") return "#c33";
+  if (status === "partially_refunded") return "#c93";
   return "#888";
 }
 
@@ -90,9 +92,28 @@ export default async function OrdersPage() {
               </form>
             )}
 
+            {o.refunded_amount_cents > 0 && (
+              <div style={{ marginTop: "0.25rem", fontSize: "0.9rem", color: "#c33" }}>
+                Refunded: AED {(o.refunded_amount_cents / 100).toFixed(2)}
+              </div>
+            )}
+
             {(o.status === "paid" || o.status === "shipped") && (
-              <form action={refundOrder} style={{ marginTop: "0.5rem" }}>
+              <form
+                action={refundOrder}
+                style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}
+              >
                 <input type="hidden" name="orderId" value={o.id} />
+                <span style={{ fontSize: "0.9rem" }}>AED</span>
+                <input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={(o.total_cents / 100).toFixed(2)}
+                  defaultValue={(o.total_cents / 100).toFixed(2)}
+                  style={{ width: 90 }}
+                />
                 <RefundButton />
               </form>
             )}

@@ -26,9 +26,10 @@ export async function refundOrder(formData: FormData) {
   if (!store) throw new Error("No store context");
 
   const orderId = String(formData.get("orderId"));
+  const amountInput = String(formData.get("amount") || "").trim();
 
   const { rows } = await db.query(
-    "select status, stripe_payment_intent_id from orders where id = $1 and store_id = $2",
+    "select status, stripe_payment_intent_id, total_cents from orders where id = $1 and store_id = $2",
     [orderId, store.id]
   );
   const order = rows[0];
@@ -41,16 +42,31 @@ export async function refundOrder(formData: FormData) {
     throw new Error("No payment record found for this order");
   }
 
-  // Full refund: reverse the transfer to the merchant's connected account
-  // AND refund the platform's own application fee — otherwise the platform
-  // would keep a fee on an order that got cancelled.
+  let amountCents = order.total_cents;
+  if (amountInput) {
+    const parsed = Math.round(parseFloat(amountInput) * 100);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error("Enter a valid refund amount");
+    }
+    if (parsed > order.total_cents) {
+      throw new Error("Refund amount can't exceed the order total");
+    }
+    amountCents = parsed;
+  }
+
+  const isFullRefund = amountCents >= order.total_cents;
+
+  // Full refund: omit `amount` entirely so Stripe refunds the whole charge.
+  // Partial: pass the amount — Stripe automatically prorates the
+  // application fee refund to match, when refund_application_fee is true.
   await stripe.refunds.create({
     payment_intent: order.stripe_payment_intent_id,
+    ...(isFullRefund ? {} : { amount: amountCents }),
     reverse_transfer: true,
     refund_application_fee: true,
   });
 
-  await applyRefund(orderId, store.id);
+  await applyRefund(orderId, store.id, amountCents);
 
   revalidatePath("/admin/orders");
 }
