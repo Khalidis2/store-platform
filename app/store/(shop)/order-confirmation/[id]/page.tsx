@@ -15,14 +15,18 @@ export default async function OrderConfirmationPage({ params }: { params: { id: 
 
   return (
     <main style={{ padding: "2rem" }}>
-      <h1>Order received</h1>
+      <h1>{order.status === "paid" ? "Payment received" : "Order received"}</h1>
       <p>
         Order #{order.id.slice(0, 8)} — AED {(order.total_cents / 100).toFixed(2)}
       </p>
-      <p style={{ color: "#666" }}>
-        Status: {order.status}. The merchant will be in touch at {order.customer_email} to
-        arrange payment and delivery.
-      </p>
+      {order.status === "paid" ? (
+        <p style={{ color: "#2a2" }}>Thank you! A confirmation has been sent to {order.customer_email}.</p>
+      ) : (
+        <p style={{ color: "#666" }}>
+          Status: {order.status}. If you just completed payment and this still shows pending,
+          refresh in a moment — confirmation can take a few seconds to arrive.
+        </p>
+      )}
     </main>
   );
 }
