@@ -11,8 +11,8 @@ export default async function AdminHome() {
     `select
        (select count(*) from products where store_id = $1) as product_count,
        (select count(*) from orders where store_id = $1) as order_count,
-       (select count(*) from orders where store_id = $1 and status = 'paid') as needs_fulfillment,
-       (select coalesce(sum(total_cents), 0) from orders where store_id = $1 and status in ('paid', 'fulfilled')) as revenue_cents`,
+       (select count(*) from orders where store_id = $1 and status = 'paid') as needs_shipping,
+       (select coalesce(sum(total_cents), 0) from orders where store_id = $1 and status in ('paid', 'shipped')) as revenue_cents`,
     [store.id]
   );
 
@@ -29,10 +29,10 @@ export default async function AdminHome() {
           <div style={{ color: "#666" }}>Orders</div>
         </div>
         <div>
-          <strong style={{ fontSize: "1.5rem", color: counts.needs_fulfillment > 0 ? "#a66" : undefined }}>
-            {counts.needs_fulfillment}
+          <strong style={{ fontSize: "1.5rem", color: counts.needs_shipping > 0 ? "#a66" : undefined }}>
+            {counts.needs_shipping}
           </strong>
-          <div style={{ color: "#666" }}>Needs fulfillment</div>
+          <div style={{ color: "#666" }}>Needs shipping</div>
         </div>
         <div>
           <strong style={{ fontSize: "1.5rem" }}>AED {(counts.revenue_cents / 100).toFixed(2)}</strong>

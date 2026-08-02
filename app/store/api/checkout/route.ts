@@ -2,6 +2,14 @@ import { db } from "@/lib/db";
 import { getCurrentStore } from "@/lib/get-store";
 
 type CartLine = { productId: string; quantity: number };
+type ShippingAddress = {
+  fullName?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  country?: string;
+};
 
 export async function POST(req: Request) {
   const store = await getCurrentStore();
@@ -9,10 +17,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "Store not found" }, { status: 404 });
   }
 
-  const { email, items } = (await req.json()) as { email?: string; items?: CartLine[] };
+  const { email, items, shipping } = (await req.json()) as {
+    email?: string;
+    items?: CartLine[];
+    shipping?: ShippingAddress;
+  };
 
   if (!email || !Array.isArray(items) || items.length === 0) {
     return Response.json({ error: "Email and at least one item are required" }, { status: 400 });
+  }
+
+  if (!shipping?.fullName || !shipping?.phone || !shipping?.addressLine1 || !shipping?.city || !shipping?.country) {
+    return Response.json({ error: "Shipping address is incomplete" }, { status: 400 });
   }
 
   // Re-fetch authoritative prices (and current stock) from the DB rather
@@ -57,9 +73,9 @@ export async function POST(req: Request) {
   }
 
   const result = await db.query(
-    `insert into orders (store_id, customer_email, total_cents, status, line_items)
-     values ($1, $2, $3, 'pending', $4) returning id`,
-    [store.id, email, totalCents, JSON.stringify(lineItems)]
+    `insert into orders (store_id, customer_email, total_cents, status, line_items, shipping_address)
+     values ($1, $2, $3, 'pending', $4, $5) returning id`,
+    [store.id, email, totalCents, JSON.stringify(lineItems), JSON.stringify(shipping)]
   );
 
   return Response.json({ orderId: result.rows[0].id });

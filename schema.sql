@@ -31,6 +31,8 @@ create table if not exists orders (
   status text default 'pending',
   stripe_payment_intent_id text,
   line_items jsonb not null default '[]'::jsonb,
+  shipping_address jsonb not null default '{}'::jsonb,
+  tracking_number text,
   created_at timestamptz default now()
 );
 

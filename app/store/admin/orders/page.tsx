@@ -1,8 +1,16 @@
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
-import { markFulfilled } from "./actions";
+import { markShipped } from "./actions";
 
 type LineItem = { productId: string; name: string; priceCents: number; quantity: number };
+type ShippingAddress = {
+  fullName?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  country?: string;
+};
 
 type Order = {
   id: string;
@@ -10,12 +18,14 @@ type Order = {
   total_cents: number;
   status: string;
   line_items: LineItem[];
+  shipping_address: ShippingAddress;
+  tracking_number: string | null;
   created_at: string;
 };
 
 function statusColor(status: string) {
   if (status === "paid") return "#a66";
-  if (status === "fulfilled") return "#2a2";
+  if (status === "shipped") return "#2a2";
   return "#888";
 }
 
@@ -55,10 +65,25 @@ export default async function OrdersPage() {
               ))}
             </ul>
 
+            {o.shipping_address?.addressLine1 && (
+              <div style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
+                <strong>Ship to:</strong> {o.shipping_address.fullName}, {o.shipping_address.addressLine1}
+                {o.shipping_address.addressLine2 ? `, ${o.shipping_address.addressLine2}` : ""},{" "}
+                {o.shipping_address.city}, {o.shipping_address.country} — {o.shipping_address.phone}
+              </div>
+            )}
+
+            {o.status === "shipped" && o.tracking_number && (
+              <div style={{ marginTop: "0.25rem", fontSize: "0.9rem" }}>
+                Tracking: {o.tracking_number}
+              </div>
+            )}
+
             {o.status === "paid" && (
-              <form action={markFulfilled} style={{ marginTop: "0.5rem" }}>
+              <form action={markShipped} style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
                 <input type="hidden" name="orderId" value={o.id} />
-                <button type="submit">Mark fulfilled</button>
+                <input name="trackingNumber" placeholder="Tracking number (optional)" style={{ flex: 1 }} />
+                <button type="submit">Mark shipped</button>
               </form>
             )}
           </div>

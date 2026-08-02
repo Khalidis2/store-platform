@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–5 (MVP loop complete)
+# Store Platform — Phases 1–6
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -27,20 +27,25 @@ keep building.
 - `app/api/webhooks/stripe/route.ts` — root-domain webhook
 
 **Phase 5 — fulfillment loop**
-- The webhook now decrements inventory when an order is marked paid,
-  wrapped in a transaction and gated on `status = 'pending' → 'paid'` in the
-  same query — safe against Stripe redelivering the same event twice
-- `app/store/api/checkout/route.ts` checks requested quantity against
-  current stock before creating an order (doesn't fully prevent overselling
-  under concurrent checkouts — that needs proper inventory reservation,
-  deliberately left out of MVP)
-- `app/store/admin/orders/` now shows line items per order and a "Mark
-  fulfilled" action for paid orders (`app/store/admin/orders/actions.ts`)
-- Admin dashboard shows a "Needs fulfillment" count — the actionable signal
-  a merchant checks day to day
+- Webhook decrements inventory when an order is marked paid, transactional
+  and idempotent against Stripe redelivering the same event
+- `app/store/admin/orders/` shows line items and (previously) a fulfillment
+  action — now superseded by Phase 6's shipping workflow
 
-This closes the full loop: browse → cart → checkout → pay → merchant gets
-paid minus platform fee → inventory updates → merchant fulfills.
+**Phase 6 — shipping address + shipped status**
+- Checkout now collects a real shipping address (name, phone, address,
+  city, country) — stored as `orders.shipping_address` (jsonb)
+- Order status flow is now `pending → paid → shipped`, with an optional
+  `tracking_number` captured when the merchant marks an order shipped
+  (`app/store/admin/orders/actions.ts`)
+- Order confirmation page shows the shipping address and tracking number
+  once available
+- Dashboard's "Needs shipping" count replaces the earlier generic
+  "fulfillment" count
+
+This closes the full loop: browse → cart → checkout (with shipping
+address) → real Stripe payment → merchant paid minus platform fee →
+inventory decremented → merchant ships with tracking.
 
 ## Setup
 
@@ -48,8 +53,8 @@ paid minus platform fee → inventory updates → merchant fulfills.
 2. Create a Supabase project (Postgres + Auth)
 3. Copy `.env.example` to `.env.local`, fill in `DATABASE_URL`, the two
    `NEXT_PUBLIC_SUPABASE_*` values, and `STRIPE_SECRET_KEY`
-4. Run `schema.sql` against the database (or the migration in `migrations/`
-   if upgrading an existing DB)
+4. Run `schema.sql` against the database (or run the migrations in
+   `migrations/` in order, if upgrading an existing DB)
 5. `npm run dev`
 6. **Stripe webhook (local testing)**: install the Stripe CLI, run
    `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
@@ -72,12 +77,12 @@ paid minus platform fee → inventory updates → merchant fulfills.
 ## What's next (beyond MVP, in rough priority order)
 
 - Proper inventory reservation to fully close the oversell gap
-- Order status beyond fulfilled (shipped, cancelled, refunded)
+- Order status beyond shipped (delivered, cancelled, refunded)
 - Refunds/disputes handling
-- Shipping address collection
 - Password reset flow
 - Order search/filtering in admin
 - Per-merchant platform fee tiers
+- Address validation / structured country-state selects instead of free text
 
 ## Deliberately cut from MVP
 
