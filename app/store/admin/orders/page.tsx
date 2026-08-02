@@ -1,6 +1,7 @@
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
-import { markShipped } from "./actions";
+import { markShipped, refundOrder } from "./actions";
+import RefundButton from "./RefundButton";
 
 type LineItem = { productId: string; name: string; priceCents: number; quantity: number };
 type ShippingAddress = {
@@ -27,6 +28,7 @@ function statusColor(status: string) {
   if (status === "paid") return "#a66";
   if (status === "shipped") return "#2a2";
   if (status === "expired") return "#bbb";
+  if (status === "refunded") return "#c33";
   return "#888";
 }
 
@@ -85,6 +87,13 @@ export default async function OrdersPage() {
                 <input type="hidden" name="orderId" value={o.id} />
                 <input name="trackingNumber" placeholder="Tracking number (optional)" style={{ flex: 1 }} />
                 <button type="submit">Mark shipped</button>
+              </form>
+            )}
+
+            {(o.status === "paid" || o.status === "shipped") && (
+              <form action={refundOrder} style={{ marginTop: "0.5rem" }}>
+                <input type="hidden" name="orderId" value={o.id} />
+                <RefundButton />
               </form>
             )}
           </div>

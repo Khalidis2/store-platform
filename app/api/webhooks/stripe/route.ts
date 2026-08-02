@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { releaseInventory, type LineItem } from "@/lib/inventory";
+import { applyRefund } from "@/lib/orders";
 
 export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
@@ -37,6 +38,23 @@ export async function POST(req: Request) {
       const orderId = session.metadata?.orderId;
       if (orderId) {
         await releaseExpiredReservation(orderId);
+      }
+      break;
+    }
+
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId =
+        typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+      if (paymentIntentId) {
+        const { rows } = await db.query(
+          "select id, store_id from orders where stripe_payment_intent_id = $1",
+          [paymentIntentId]
+        );
+        const order = rows[0];
+        if (order) {
+          await applyRefund(order.id, order.store_id);
+        }
       }
       break;
     }

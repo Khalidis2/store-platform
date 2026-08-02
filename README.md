@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–7
+# Store Platform — Phases 1–8
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -27,34 +27,35 @@ keep building.
 - `app/api/webhooks/stripe/route.ts` — root-domain webhook
 
 **Phase 5 — fulfillment loop (order status, initial inventory handling)**
-- `app/store/admin/orders/` shows line items per order
 
 **Phase 6 — shipping address + shipped status**
 - Checkout collects a real shipping address, stored as `orders.shipping_address`
 - Order status flow: `pending → paid → shipped`, with `tracking_number`
 
-**Phase 7 — proper inventory reservation (closes the oversell gap)**
-- `lib/inventory.ts` — `reserveInventory` / `releaseInventory`, atomic via a
-  single `UPDATE ... WHERE inventory >= $quantity` per line item, so two
-  concurrent requests for the last unit of a product can't both succeed
-- Reservation now happens in `app/store/api/checkout/pay/route.ts`, at the
-  moment a Stripe Checkout Session is created — not on payment confirmation.
-  The order row is locked (`FOR UPDATE`) for the duration, so a double-click
-  on "Continue to payment" can't reserve stock twice
-- Checkout Sessions now expire in 31 minutes (Stripe's minimum is 30). The
-  webhook's new `checkout.session.expired` case releases the reservation and
-  marks the order `expired` if it was never paid
-- If Stripe's session-creation API call itself fails after stock was already
-  reserved, the route releases it immediately in the same request — it
-  doesn't rely solely on the expiry webhook for that specific failure mode
-- Order status set now includes `expired` alongside `pending` / `paid` / `shipped`
+**Phase 7 — proper inventory reservation**
+- `lib/inventory.ts` — atomic reserve/release, race-safe under concurrent
+  checkouts. Reservation happens when a Checkout Session is created, released
+  automatically if the session expires unpaid (`checkout.session.expired`)
 
-**Known remaining gap**: this relies on Stripe reliably delivering the
-`checkout.session.expired` webhook. If that delivery is ever missed (rare,
-but Stripe doesn't guarantee zero failure), a reservation could stay locked
-until manually investigated. A periodic sweep job that releases reservations
-on `pending` orders older than the session expiry window would close this
-fully — not built here, flagged as the one remaining edge case.
+**Phase 8 — refunds**
+- `lib/orders.ts` (`applyRefund`) — shared logic used by both the admin
+  action and the webhook, so refunds stay consistent regardless of where
+  they're triggered from. Idempotent: refunding twice is a no-op
+- `app/store/admin/orders/actions.ts` (`refundOrder`) — calls
+  `stripe.refunds.create` with `reverse_transfer: true` and
+  `refund_application_fee: true`, so a refund reverses **both** the payout
+  to the merchant's connected account and the platform's own fee — without
+  `refund_application_fee`, the platform would keep a fee on a cancelled order
+- Restocking on refund is conditional: if the order hadn't shipped yet,
+  inventory is restored; if it had already shipped, it isn't — the item has
+  physically left, and handling actual returned goods is a manual process
+  outside MVP scope
+- `charge.refunded` webhook case catches refunds issued directly from the
+  Stripe dashboard (not just ones triggered through our app), keeping order
+  status correct either way
+- `RefundButton.tsx` — confirm dialog before submitting, since this reverses
+  real money movement
+- New order status: `refunded` (alongside `pending`, `paid`, `shipped`, `expired`)
 
 ## Setup
 
@@ -67,10 +68,7 @@ fully — not built here, flagged as the one remaining edge case.
 5. `npm run dev`
 6. **Stripe webhook (local testing)**: install the Stripe CLI, run
    `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
-   signing secret it prints into `STRIPE_WEBHOOK_SECRET`. Make sure
-   `checkout.session.expired` is included in the events you're listening for
-   (the CLI forwards all events by default; in the Dashboard you'll need to
-   add it explicitly to the webhook endpoint's event list)
+   signing secret it prints into `STRIPE_WEBHOOK_SECRET`
 7. To test subdomain routing locally, add a hosts file entry, e.g.
    `127.0.0.1 teststore.localhost`, then visit
    `http://teststore.localhost:3000`
@@ -82,8 +80,8 @@ fully — not built here, flagged as the one remaining edge case.
 - Set `DATABASE_URL`, the Supabase env vars, and `STRIPE_SECRET_KEY` in Vercel
 - Add a Stripe webhook endpoint at `https://yourapp.com/api/webhooks/stripe`
   listening for `checkout.session.completed`, `checkout.session.expired`,
-  and `account.updated`; copy its signing secret into `STRIPE_WEBHOOK_SECRET`
-  in Vercel
+  `charge.refunded`, and `account.updated`; copy its signing secret into
+  `STRIPE_WEBHOOK_SECRET` in Vercel
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with
   your real domain
 
@@ -91,8 +89,8 @@ fully — not built here, flagged as the one remaining edge case.
 
 - Periodic sweep for `pending` orders older than the session expiry window,
   as a backstop if a `checkout.session.expired` webhook is ever missed
-- Refunds/disputes handling
-- Order status beyond shipped (delivered, cancelled)
+- Partial refunds (currently full-refund only)
+- Order status beyond shipped (delivered, cancelled pre-shipment by merchant)
 - Password reset flow
 - Order search/filtering in admin
 - Per-merchant platform fee tiers
@@ -101,4 +99,5 @@ fully — not built here, flagged as the one remaining edge case.
 ## Deliberately cut from MVP
 
 Custom domains, theme customization, apps marketplace, multi-currency,
-discount codes, customer accounts (guest checkout via email only).
+discount codes, customer accounts (guest checkout via email only), handling
+of actual returned physical goods after a post-shipment refund.
