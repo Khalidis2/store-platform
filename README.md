@@ -117,10 +117,15 @@ keep building.
 
 ## What's next (beyond MVP)
 
-- Expand `lib/countries.ts` toward the full ISO list if global customers
-  become a reality
-- Verify AfterShip's exact webhook payload shape once real traffic flows,
-  and tighten the defensive parsing in the webhook handler accordingly
+- `lib/countries.ts` now has the full ISO 3166-1 list (199 countries).
+- AfterShip's webhook payload shape has been verified against their current
+  public API docs (top-level `{event, event_id, msg: {...}}`, with `tag`
+  and `order_id` inside `msg`) and confirmed end-to-end against the
+  handler in `app/api/webhooks/aftership/route.ts` using a synthetic
+  payload matching that shape — not live carrier traffic, so the
+  defensive fallback parsing (`body.tracking` / bare `body`) stays in
+  place as a safety net in case AfterShip's actual delivery differs from
+  their docs.
 
 ## Testing this end to end locally
 
