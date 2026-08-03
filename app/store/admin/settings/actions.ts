@@ -33,7 +33,6 @@ export async function connectStripe() {
       type: "custom",
       country: "AE",
       capabilities: {
-        card_payments: { requested: true },
         transfers: { requested: true },
       },
     });
