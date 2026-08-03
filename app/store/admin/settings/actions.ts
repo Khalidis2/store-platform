@@ -3,13 +3,16 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getCurrentStore } from "@/lib/get-store";
+import { getOwnedStore } from "@/lib/get-store";
 import { stripe } from "@/lib/stripe";
 import { getBaseUrl } from "@/lib/get-base-url";
 
 export async function updateStoreName(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  // Re-checked here, not just in the layout — Server Actions are directly
+  // invocable and aren't protected by whatever layout wraps the page they
+  // were imported from.
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const name = String(formData.get("name") || "").trim();
   if (!name) throw new Error("Name is required");
@@ -20,8 +23,8 @@ export async function updateStoreName(formData: FormData) {
 }
 
 export async function connectStripe() {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   let accountId = store.stripe_account_id;
 

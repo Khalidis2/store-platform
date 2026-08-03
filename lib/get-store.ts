@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { db } from "./db";
 import { extractSubdomain } from "./subdomain";
+import { getSupabaseServerClient } from "./supabase-server";
 
 export type Store = {
   id: string;
@@ -31,4 +32,28 @@ export async function getCurrentStore(): Promise<Store | null> {
     [subdomain]
   );
   return result.rows[0] ?? null;
+}
+
+/**
+ * Resolves the current tenant AND verifies the signed-in user actually owns
+ * it. Server Actions are invocable directly (they're effectively public
+ * HTTP endpoints, not gated by whatever layout.tsx happens to wrap the page
+ * they're imported from) — app/store/admin/layout.tsx's owner check only
+ * protects page renders, not action calls. Every store-admin Server Action
+ * that mutates data must call this instead of getCurrentStore(), or any
+ * signed-in merchant (owner of any store, not just this one) can invoke it
+ * against a store they don't own by hitting the action directly.
+ */
+export async function getOwnedStore(): Promise<Store | null> {
+  const store = await getCurrentStore();
+  if (!store) return null;
+
+  const supabase = await getSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || user.id !== store.owner_user_id) return null;
+
+  return store;
 }

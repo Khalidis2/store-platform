@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getCurrentStore } from "@/lib/get-store";
+import { getOwnedStore } from "@/lib/get-store";
 import { stripe } from "@/lib/stripe";
 import { applyRefund, markOrderDelivered } from "@/lib/orders";
 import { createAftershipTracking, type SupportedCarrier } from "@/lib/aftership";
 
 export async function markShipped(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const orderId = String(formData.get("orderId"));
   const trackingNumber = String(formData.get("trackingNumber") || "").trim() || null;
@@ -35,8 +35,8 @@ export async function markShipped(formData: FormData) {
 }
 
 export async function markDelivered(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const orderId = String(formData.get("orderId"));
   await markOrderDelivered(orderId, store.id);
@@ -45,8 +45,8 @@ export async function markDelivered(formData: FormData) {
 }
 
 export async function refundOrder(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const orderId = String(formData.get("orderId"));
   const amountInput = String(formData.get("amount") || "").trim();

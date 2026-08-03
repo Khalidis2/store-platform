@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getCurrentStore } from "@/lib/get-store";
+import { getOwnedStore } from "@/lib/get-store";
 
 export async function createProduct(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const name = String(formData.get("name") || "").trim();
   const priceCents = Math.round(Number(formData.get("price")) * 100);
@@ -27,8 +27,8 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateInventory(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const productId = String(formData.get("productId"));
   const inventory = Number(formData.get("inventory"));
@@ -45,8 +45,8 @@ export async function updateInventory(formData: FormData) {
 }
 
 export async function deleteProduct(formData: FormData) {
-  const store = await getCurrentStore();
-  if (!store) throw new Error("No store context");
+  const store = await getOwnedStore();
+  if (!store) throw new Error("Not authorized");
 
   const productId = String(formData.get("productId"));
 
