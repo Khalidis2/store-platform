@@ -8,7 +8,7 @@ import { db } from "./db";
  * granted by directly inserting a row via SQL.
  */
 export async function getPlatformAdminUser() {
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

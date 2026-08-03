@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   const lineItems = order.line_items as LineItem[];
   const feePercent = store.platform_fee_percent ?? DEFAULT_PLATFORM_FEE_PERCENT;
   const applicationFeeAmount = Math.round(order.total_cents * (feePercent / 100));
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
 
   try {
     const session = await stripe.checkout.sessions.create({

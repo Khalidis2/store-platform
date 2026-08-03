@@ -49,13 +49,14 @@ function statusColor(status: string) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { status?: string; email?: string };
+  searchParams: Promise<{ status?: string; email?: string }>;
 }) {
   const store = await getCurrentStore();
   if (!store) return null;
 
-  const status = searchParams.status || "";
-  const email = searchParams.email || "";
+  const resolvedSearchParams = await searchParams;
+  const status = resolvedSearchParams.status || "";
+  const email = resolvedSearchParams.email || "";
 
   const conditions = ["store_id = $1"];
   const params: unknown[] = [store.id];

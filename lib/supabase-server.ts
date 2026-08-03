@@ -2,8 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { COOKIE_DOMAIN } from "./cookie-domain";
 
-export function getSupabaseServerClient() {
-  const cookieStore = cookies();
+export async function getSupabaseServerClient() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
