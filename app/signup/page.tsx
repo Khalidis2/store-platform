@@ -1,22 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [storeName, setStoreName] = useState("");
-  const [subdomain, setSubdomain] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
+  const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     const supabase = getSupabaseBrowserClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      // Where Supabase sends the user after they click the confirmation
+      // link in their email — a dedicated step that finishes store setup
+      // once a session exists, whether that happens instantly (email
+      // confirmation disabled) or only after confirming (the common case).
+      options: { emailRedirectTo: `${window.location.origin}/signup/complete` },
+    });
 
     if (signUpError) {
       setError(signUpError.message);
@@ -24,36 +32,23 @@ export default function SignupPage() {
     }
 
     // If email confirmation is enabled in your Supabase project, there's no
-    // session yet at this point — the user has to confirm their email first,
-    // then come back and log in before a store can be created.
+    // session yet — the user has to click the confirmation link first,
+    // which lands them on /signup/complete once they do.
     if (!data.session) {
-      setError(
-        "Account created — check your email to confirm it, then log in to create your store."
-      );
+      setCheckEmail(true);
       return;
     }
 
-    const res = await fetch("/api/stores", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subdomain, name: storeName }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json();
-      setError(body.error || "Failed to create store");
-      return;
-    }
-
-    setDone(true);
+    router.push("/signup/complete");
   }
 
-  if (done) {
+  if (checkEmail) {
     return (
-      <main style={{ fontFamily: "system-ui", padding: "3rem" }}>
-        <h1>Store created</h1>
+      <main style={{ fontFamily: "system-ui", padding: "3rem", maxWidth: 400 }}>
+        <h1>Check your email</h1>
         <p>
-          Visit <code>{subdomain}.yourapp.com/login</code> to sign in to your new admin dashboard.
+          We sent a confirmation link to <strong>{email}</strong>. Click it to
+          finish setting up your store.
         </p>
       </main>
     );
@@ -61,7 +56,7 @@ export default function SignupPage() {
 
   return (
     <main style={{ fontFamily: "system-ui", padding: "3rem", maxWidth: 400 }}>
-      <h1>Create your store</h1>
+      <h1>Create your account</h1>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <input
@@ -71,20 +66,8 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <input
-          placeholder="Store name"
-          value={storeName}
-          onChange={(e) => setStoreName(e.target.value)}
-          required
-        />
-        <input
-          placeholder="Subdomain (e.g. khaledsstore)"
-          value={subdomain}
-          onChange={(e) => setSubdomain(e.target.value.toLowerCase())}
-          required
-        />
         {error && <p style={{ color: "crimson" }}>{error}</p>}
-        <button type="submit">Create store</button>
+        <button type="submit">Continue</button>
       </form>
     </main>
   );
