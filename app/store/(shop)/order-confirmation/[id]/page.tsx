@@ -12,13 +12,14 @@ type ShippingAddress = {
   country?: string;
 };
 
-export default async function OrderConfirmationPage({ params }: { params: { id: string } }) {
+export default async function OrderConfirmationPage({ params }: { params: Promise<{ id: string }> }) {
   const store = await getCurrentStore();
   if (!store) return null;
 
+  const { id } = await params;
   const { rows } = await db.query(
     "select id, total_cents, status, customer_email, shipping_address, tracking_number, carrier from orders where id = $1 and store_id = $2",
-    [params.id, store.id]
+    [id, store.id]
   );
   const order = rows[0];
   if (!order) notFound();

@@ -22,7 +22,7 @@ export type Store = {
  * tenant-isolation boundary — treat it as load-bearing.
  */
 export async function getCurrentStore(): Promise<Store | null> {
-  const h = headers();
+  const h = await headers();
   const subdomain = h.get("x-store-subdomain") ?? extractSubdomain(h.get("host") ?? "");
   if (!subdomain) return null;
 

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 
-export function getBaseUrl() {
-  const h = headers();
+export async function getBaseUrl() {
+  const h = await headers();
   const host = h.get("host") || "localhost:3000";
   const hostname = host.split(":")[0];
   const isLocal = hostname === "localhost" || hostname.endsWith(".localhost");

@@ -40,7 +40,7 @@ export async function connectStripe() {
     await db.query("update stores set stripe_account_id = $1 where id = $2", [accountId, store.id]);
   }
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
   const accountLink = await stripe.accountLinks.create({
     account: accountId,
     refresh_url: `${baseUrl}/admin/settings`,

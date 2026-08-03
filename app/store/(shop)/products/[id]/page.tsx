@@ -11,13 +11,14 @@ type Product = {
   inventory: number;
 };
 
-export default async function ProductDetailPage({ params }: { params: { id: string } }) {
+export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const store = await getCurrentStore();
   if (!store) return null;
 
+  const { id } = await params;
   const { rows } = await db.query<Product>(
     "select id, name, price_cents, image_url, inventory from products where id = $1 and store_id = $2",
-    [params.id, store.id]
+    [id, store.id]
   );
   const product = rows[0];
   if (!product) notFound();
