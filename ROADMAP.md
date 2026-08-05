@@ -82,9 +82,13 @@ physically returned goods, and per-item refund allocation/restocking
 - **No rate limiting** on login, signup, or checkout. Relies entirely on
   Supabase Auth's own built-in protections for the auth endpoints; the
   app's own routes (`/api/checkout`, `/api/stores`) have none.
-- **No audit log.** Platform-admin actions (changing another store's fee
-  percent) and merchant actions (refunds, deletions) aren't logged
-  anywhere beyond the row they modified — no "who did what, when" trail.
+- **Audit log now covers the three highest-stakes actions (Phase 21):**
+  refunds, product deletion, and platform-admin fee changes — visible to
+  the affected merchant at `/admin/audit-log`, including actions the
+  platform admin took on their store. Everything else (mark shipped,
+  update inventory, create product, store settings changes,
+  connectStripe) still isn't logged — this was scoped to what ROADMAP.md
+  originally called out as the concrete gap, not exhaustive coverage.
 - **Secrets rotation is entirely manual** (Stripe webhook secret,
   AfterShip webhook secret, `CRON_SECRET` all have to be regenerated and
   redeployed by hand if compromised).
