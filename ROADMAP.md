@@ -57,9 +57,12 @@ physically returned goods, and per-item refund allocation/restocking
 - **No merchant notifications.** A merchant only learns about a new order
   by checking `/admin/orders` themselves — no email/webhook/notification
   when one comes in.
-- **No storefront search, filtering, or categories.** The storefront is a
-  single flat grid of every product: fine for a handful of items, breaks
-  down past a couple dozen.
+- **Storefront search and category filtering shipped (Phase 23).** Basic
+  name search (`ilike`) and a single free-text `category` tag per
+  product (not a normalized taxonomy — no subcategories, no per-category
+  images/pages). Still no sorting (price, newest), no pagination (every
+  matching product renders on one page regardless of count), and no
+  faceted/multi-select filtering.
 - **Low-stock is now visible (Phase 20), not yet alerted.** The dashboard
   shows a "Low stock" count and the products page flags individual rows
   (`LOW_STOCK_THRESHOLD` in `lib/inventory.ts`, fixed at 5, not

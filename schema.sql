@@ -35,6 +35,7 @@ create table if not exists products (
   image_url text,
   inventory int default 0,
   description text, -- Phase 22
+  category text, -- Phase 23 — free-text tag, not a normalized taxonomy
   created_at timestamptz default now()
 );
 
