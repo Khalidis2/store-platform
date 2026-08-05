@@ -7,6 +7,7 @@ type Product = {
   name: string;
   price_cents: number;
   inventory: number;
+  image_url: string | null;
 };
 
 export default async function ProductsPage() {
@@ -29,13 +30,14 @@ export default async function ProductsPage() {
         <input name="name" placeholder="Product name" required />
         <input name="price" type="number" step="0.01" placeholder="Price (AED)" required />
         <input name="inventory" type="number" placeholder="Inventory" defaultValue={0} />
-        <input name="imageUrl" placeholder="Image URL (optional)" />
+        <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" />
         <button type="submit">Add product</button>
       </form>
 
       <table cellPadding={8} style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
+            <th></th>
             <th>Name</th>
             <th>Price</th>
             <th>Inventory</th>
@@ -45,6 +47,13 @@ export default async function ProductsPage() {
         <tbody>
           {products.map((p) => (
             <tr key={p.id} style={{ borderBottom: "1px solid #eee" }}>
+              <td>
+                {p.image_url ? (
+                  <img src={p.image_url} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4 }} />
+                ) : (
+                  <div style={{ width: 40, height: 40, background: "#f2f2f2", borderRadius: 4 }} />
+                )}
+              </td>
               <td>{p.name}</td>
               <td>AED {(p.price_cents / 100).toFixed(2)}</td>
               <td>
@@ -64,7 +73,7 @@ export default async function ProductsPage() {
           ))}
           {products.length === 0 && (
             <tr>
-              <td colSpan={4} style={{ color: "#666" }}>
+              <td colSpan={5} style={{ color: "#666" }}>
                 No products yet.
               </td>
             </tr>

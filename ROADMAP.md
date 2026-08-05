@@ -68,7 +68,7 @@ physically returned goods, and per-item refund allocation/restocking
   color, and a tagline — real theming (layout choice, fonts, section
   ordering, custom pages) doesn't exist. Every store's *structure* still
   looks identical.
-- **Product data is minimal.** One image (a URL, not an upload), no
+- **Product data is minimal.** One image (uploaded, as of Phase 19), no
   variants (size/color), no rich description field, no categories/tags.
 - **Country list is now the full ISO 3166-1 set**, but there's still no
   concept of per-country shipping rates, tax, or availability — every
@@ -76,9 +76,6 @@ physically returned goods, and per-item refund allocation/restocking
 
 ## Infra / operational gaps
 
-- **No image upload or storage.** `logo_url` and `product.image_url` are
-  both just free-text URL fields — a merchant has to host their own
-  images somewhere else and paste in a link.
 - **No rate limiting** on login, signup, or checkout. Relies entirely on
   Supabase Auth's own built-in protections for the auth endpoints; the
   app's own routes (`/api/checkout`, `/api/stores`) have none.
@@ -101,9 +98,9 @@ physically returned goods, and per-item refund allocation/restocking
 2. Separate prod/test databases
 3. Order confirmation + shipping-update emails to customers (biggest gap
    in actually being usable by a real merchant's real customers)
-4. A handful of authorization/regression tests, specifically covering the
-   Server Action ownership pattern documented in ARCHITECTURE.md — this
-   is the class of bug most likely to silently reappear when a new
-   admin action gets added later
-5. Image upload (logo + product photos) instead of raw URL fields
+4. ~~A handful of authorization/regression tests~~ — done (Phase 19,
+   `npm test`), covering the Server Action ownership pattern documented
+   in ARCHITECTURE.md, inventory reservation, and refund idempotency
+5. ~~Image upload (logo + product photos) instead of raw URL fields~~ —
+   done (Phase 19), via Supabase Storage
 6. Everything else in this document, roughly in the order listed

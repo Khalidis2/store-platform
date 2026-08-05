@@ -87,6 +87,9 @@ orders           — store_id-scoped, status, line_items (jsonb snapshot,
                     inventory_reserved, refunded_amount_cents, has_shipped
 ```
 
+`stores.logo_url` and `products.image_url` are both public Supabase Storage
+URLs, not pasted links — see "Image uploads" below.
+
 `orders.line_items` is a frozen JSON snapshot taken at order-creation time
 (name, price, quantity) — not a foreign-key relationship to `products`.
 This is intentional: an order must keep showing what the customer actually
@@ -212,6 +215,27 @@ merchant marks an order shipped; the webhook handler
 `AFTERSHIP_WEBHOOK_SECRET` aren't configured — a merchant marking
 something shipped should never be blocked by a tracking-registration
 hiccup, and the tracking number is always stored as plain text regardless.
+
+## Image uploads
+
+Store logos and product images go through `lib/upload-image.ts` into a
+single Supabase Storage bucket (`store-images`, public read — see
+`migrations/010_phase19_image_upload.sql`). Validation (JPEG/PNG/WEBP/GIF,
+5MB max) happens in that helper, not in the browser.
+
+The upload itself runs through the *merchant's own authenticated Supabase
+session* (`getSupabaseServerClient()`), not a service-role client. RLS on
+`storage.objects` grants insert/update/delete/select to any
+`authenticated` user for this bucket — it does **not** check which store
+they're uploading to. The tenant boundary is enforced one layer up: only
+call `uploadImage()` from a Server Action that has already verified
+ownership via `getOwnedStore()`, and always prefix the storage path with
+the store's id (`${store.id}/logo`, `${store.id}/products`) so different
+merchants' files can't collide, even though nothing at the Storage layer
+would currently stop one merchant from overwriting another's exact path
+if they somehow guessed it. Tightening this with a path-based RLS policy
+is a reasonable defense-in-depth improvement if this bucket ever needs it
+(see ROADMAP.md).
 
 ## Deployment shape
 

@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–18
+# Store Platform — Phases 1–19
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -78,13 +78,25 @@ model, tenancy, auth, payments, order lifecycle) and
   and `AFTERSHIP_WEBHOOK_SECRET` in your env
 
 **Phase 18 — basic storefront branding**
-- Merchants can set a logo URL, an accent color, and a tagline from store
-  settings (`stores.logo_url` / `accent_color` / `tagline`, all optional)
+- Merchants can set a logo, an accent color, and a tagline from store
+  settings (`stores.logo_url` / `accent_color` / `tagline`, all optional —
+  logo upload itself arrived in Phase 19, see below)
 - The storefront header shows the logo (or the store name as plain text if
   unset) and the tagline; the three primary CTAs (Add to cart, Proceed to
   checkout, Continue to payment) render with the accent color via a
   `--store-accent` CSS custom property set in the shop layout
 - A store with nothing set renders exactly as before this phase
+
+**Phase 19 — real image upload (logo + product photos), plus first automated tests**
+- Store logo and product images are now uploaded files, not pasted URLs —
+  `lib/upload-image.ts` uploads to a Supabase Storage bucket
+  (`store-images`) using the merchant's own authenticated session, so
+  RLS on `storage.objects` (not a service-role key) is what enforces
+  "must be signed in" — see `migrations/010_phase19_image_upload.sql`
+  for the bucket + policy setup a fresh Supabase project needs
+- JPEG/PNG/WEBP/GIF, 5MB max, enforced in `lib/upload-image.ts`
+- First automated tests in the repo (`npm test`, via Vitest) — see
+  "Automated tests" below
 
 ## Setup
 
@@ -94,18 +106,22 @@ model, tenancy, auth, payments, order lifecycle) and
    `NEXT_PUBLIC_SUPABASE_*` values, `STRIPE_SECRET_KEY`, and `CRON_SECRET`
 4. Run `schema.sql` against the database (or run the migrations in
    `migrations/` in order, if upgrading an existing DB)
-5. In Supabase Auth → URL Configuration, add a wildcard redirect URL for
+5. Run `migrations/010_phase19_image_upload.sql` against the database —
+   `schema.sql` only covers the public schema, not Supabase Storage, so
+   this one's needed even for a brand-new project (sets up the
+   `store-images` bucket and its RLS policies for logo/product uploads)
+6. In Supabase Auth → URL Configuration, add a wildcard redirect URL for
    your domain (needed for password reset across subdomains)
-6. Sign up as a merchant for yourself, then grant yourself platform-admin
+7. Sign up as a merchant for yourself, then grant yourself platform-admin
    access — see `migrations/006_phase14_platform_admin.sql`
-7. (Optional) Sign up for AfterShip, get an API key, and configure a
+8. (Optional) Sign up for AfterShip, get an API key, and configure a
    webhook pointing at `/api/webhooks/aftership` for automated carrier
    tracking — otherwise tracking numbers are just stored as free text
-8. `npm run dev`
-9. **Stripe webhook (local testing)**: install the Stripe CLI, run
-   `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
-   signing secret it prints into `STRIPE_WEBHOOK_SECRET`
-10. To test subdomain routing locally, add a hosts file entry, e.g.
+9. `npm run dev`
+10. **Stripe webhook (local testing)**: install the Stripe CLI, run
+    `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, put the
+    signing secret it prints into `STRIPE_WEBHOOK_SECRET`
+11. To test subdomain routing locally, add a hosts file entry, e.g.
     `127.0.0.1 teststore.localhost`, then visit
     `http://teststore.localhost:3000`
 
@@ -123,6 +139,9 @@ model, tenancy, auth, payments, order lifecycle) and
 - If using AfterShip, add a webhook pointing at
   `https://yourapp.com/api/webhooks/aftership` in AfterShip's dashboard
 - In Supabase, add the wildcard redirect URL for password reset
+- If production uses a different Supabase project than local dev, run
+  `migrations/010_phase19_image_upload.sql` against it too — logo/product
+  uploads will fail with a permissions error otherwise
 - Grant yourself platform-admin access via SQL
 - `vercel.json`'s cron entry deploys automatically with the project
 - Update `lib/subdomain.ts` (`ROOT_DOMAINS`) and `lib/cookie-domain.ts` with

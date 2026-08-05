@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { getOwnedStore } from "@/lib/get-store";
 import { stripe } from "@/lib/stripe";
 import { getBaseUrl } from "@/lib/get-base-url";
+import { uploadImage } from "@/lib/upload-image";
 
 export async function updateStoreProfile(formData: FormData) {
   // Re-checked here, not just in the layout — Server Actions are directly
@@ -17,7 +18,6 @@ export async function updateStoreProfile(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   if (!name) throw new Error("Name is required");
 
-  const logoUrl = String(formData.get("logoUrl") || "").trim() || null;
   const tagline = String(formData.get("tagline") || "").trim() || null;
 
   const accentColorRaw = String(formData.get("accentColor") || "").trim();
@@ -25,6 +25,15 @@ export async function updateStoreProfile(formData: FormData) {
     throw new Error("Accent color must be a hex value like #4f46e5");
   }
   const accentColor = accentColorRaw || null;
+
+  // Only replaces the logo if a new file was actually chosen — an empty
+  // file input still shows up in FormData with size 0, which uploadImage
+  // would otherwise reject as an invalid image.
+  const logoFile = formData.get("logo");
+  let logoUrl = store.logo_url;
+  if (logoFile instanceof File && logoFile.size > 0) {
+    logoUrl = await uploadImage(logoFile, `${store.id}/logo`);
+  }
 
   await db.query(
     "update stores set name = $1, logo_url = $2, accent_color = $3, tagline = $4 where id = $5",
