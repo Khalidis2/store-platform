@@ -54,8 +54,27 @@ create table if not exists orders (
   created_at timestamptz default now()
 );
 
+-- Phase 21 — "who did what, when" trail for the highest-stakes actions
+-- (refunds, product deletion, platform-admin fee changes). store_id is
+-- always the affected store, even when actor_role is 'platform_admin' and
+-- the actor isn't that store's owner — a merchant should be able to see
+-- when a platform admin touched their store, not just when they did it
+-- themselves.
+create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid references stores(id) on delete cascade,
+  actor_user_id uuid not null,
+  actor_role text not null,
+  action text not null,
+  target_type text,
+  target_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
 -- Every query against products/orders MUST filter by store_id.
 -- These indexes make that the fast path, not an afterthought.
 create index if not exists idx_products_store on products(store_id);
 create index if not exists idx_orders_store on orders(store_id);
 create index if not exists idx_stores_subdomain on stores(subdomain);
+create index if not exists idx_audit_log_store on audit_log(store_id);

@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–20
+# Store Platform — Phases 1–21
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -106,6 +106,18 @@ model, tenancy, auth, payments, order lifecycle) and
   "Low stock" (`LOW_STOCK_THRESHOLD`, fixed at 5 in `lib/inventory.ts`)
 - No notification/email when a product crosses the threshold — a
   merchant still has to check the dashboard
+
+**Phase 21 — activity log for refunds, product deletion, and fee changes**
+- New `audit_log` table (`migrations/011_phase21_audit_log.sql`) records
+  who did what, when — scoped to the three actions ROADMAP.md flagged as
+  the concrete gap: refunds, product deletion, and platform-admin fee
+  changes. Not every mutation is logged, deliberately.
+- `store_id` on each entry is always the *affected* store, even when
+  `actor_role` is `platform_admin` and the actor isn't that store's
+  owner — a merchant can see `/admin/audit-log` and find out when a
+  platform admin touched their store, not just their own actions.
+- `lib/audit.ts`'s `logAction()` is the single write path, called from
+  `refundOrder`, `deleteProduct`, and platform-admin's `updateStoreFee`.
 
 ## Setup
 

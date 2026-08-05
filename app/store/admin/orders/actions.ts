@@ -6,6 +6,7 @@ import { getOwnedStore } from "@/lib/get-store";
 import { stripe } from "@/lib/stripe";
 import { applyRefund, markOrderDelivered } from "@/lib/orders";
 import { createAftershipTracking, type SupportedCarrier } from "@/lib/aftership";
+import { logAction } from "@/lib/audit";
 
 export async function markShipped(formData: FormData) {
   const store = await getOwnedStore();
@@ -93,6 +94,16 @@ export async function refundOrder(formData: FormData) {
 
   const newCumulativeRefunded = order.refunded_amount_cents + thisRefundCents;
   await applyRefund(orderId, store.id, newCumulativeRefunded);
+
+  await logAction({
+    storeId: store.id,
+    actorUserId: store.owner_user_id,
+    actorRole: "merchant",
+    action: "refund",
+    targetType: "order",
+    targetId: orderId,
+    metadata: { amountCents: thisRefundCents, cumulativeRefundedCents: newCumulativeRefunded },
+  });
 
   revalidatePath("/admin/orders");
 }

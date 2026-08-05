@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { getOwnedStore } from "@/lib/get-store";
 import { uploadImage } from "@/lib/upload-image";
+import { logAction } from "@/lib/audit";
 
 export async function createProduct(formData: FormData) {
   const store = await getOwnedStore();
@@ -56,7 +57,22 @@ export async function deleteProduct(formData: FormData) {
 
   const productId = String(formData.get("productId"));
 
-  await db.query(`delete from products where id = $1 and store_id = $2`, [productId, store.id]);
+  const { rows } = await db.query(
+    `delete from products where id = $1 and store_id = $2 returning name`,
+    [productId, store.id]
+  );
+
+  if (rows[0]) {
+    await logAction({
+      storeId: store.id,
+      actorUserId: store.owner_user_id,
+      actorRole: "merchant",
+      action: "delete_product",
+      targetType: "product",
+      targetId: productId,
+      metadata: { name: rows[0].name },
+    });
+  }
 
   revalidatePath("/admin/products");
 }
