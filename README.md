@@ -1,7 +1,11 @@
-# Store Platform — Phases 1–17
+# Store Platform — Phases 1–18
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the app actually works (data
+model, tenancy, auth, payments, order lifecycle) and
+[ROADMAP.md](ROADMAP.md) for what's missing and what to build next.
 
 ## What's here
 
@@ -72,6 +76,15 @@ keep building.
   delivery detection for carriers outside Aramex/Emirates Post
 - Requires an AfterShip account (free tier available) — `AFTERSHIP_API_KEY`
   and `AFTERSHIP_WEBHOOK_SECRET` in your env
+
+**Phase 18 — basic storefront branding**
+- Merchants can set a logo URL, an accent color, and a tagline from store
+  settings (`stores.logo_url` / `accent_color` / `tagline`, all optional)
+- The storefront header shows the logo (or the store name as plain text if
+  unset) and the tagline; the three primary CTAs (Add to cart, Proceed to
+  checkout, Continue to payment) render with the accent color via a
+  `--store-accent` CSS custom property set in the shop layout
+- A store with nothing set renders exactly as before this phase
 
 ## Setup
 
