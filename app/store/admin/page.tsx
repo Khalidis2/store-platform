@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
+import { LOW_STOCK_THRESHOLD } from "@/lib/inventory";
 
 export default async function AdminHome() {
   const store = await getCurrentStore();
@@ -12,11 +14,12 @@ export default async function AdminHome() {
        (select count(*) from products where store_id = $1) as product_count,
        (select count(*) from orders where store_id = $1) as order_count,
        (select count(*) from orders where store_id = $1 and status = 'paid') as needs_shipping,
+       (select count(*) from products where store_id = $1 and inventory <= $2) as low_stock_count,
        (select coalesce(sum(total_cents - refunded_amount_cents), 0)
         from orders
         where store_id = $1
           and status in ('paid', 'shipped', 'delivered', 'refunded', 'partially_refunded')) as revenue_cents`,
-    [store.id]
+    [store.id, LOW_STOCK_THRESHOLD]
   );
 
   return (
@@ -37,6 +40,12 @@ export default async function AdminHome() {
           </strong>
           <div style={{ color: "#666" }}>Needs shipping</div>
         </div>
+        <Link href="/admin/products" style={{ textDecoration: "none", color: "inherit" }}>
+          <strong style={{ fontSize: "1.5rem", color: counts.low_stock_count > 0 ? "#a66" : undefined }}>
+            {counts.low_stock_count}
+          </strong>
+          <div style={{ color: "#666" }}>Low stock (≤{LOW_STOCK_THRESHOLD})</div>
+        </Link>
         <div>
           <strong style={{ fontSize: "1.5rem" }}>AED {(counts.revenue_cents / 100).toFixed(2)}</strong>
           <div style={{ color: "#666" }}>Revenue (net of refunds)</div>

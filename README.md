@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–19
+# Store Platform — Phases 1–20
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -97,6 +97,15 @@ model, tenancy, auth, payments, order lifecycle) and
 - JPEG/PNG/WEBP/GIF, 5MB max, enforced in `lib/upload-image.ts`
 - First automated tests in the repo (`npm test`, via Vitest) — see
   "Automated tests" below
+
+**Phase 20 — low-stock visibility**
+- Merchant dashboard shows a "Low stock" count alongside the existing
+  Products/Orders/Needs shipping/Revenue tiles, linking to the products
+  page
+- The products page flags individual rows "Out of stock" (0) or
+  "Low stock" (`LOW_STOCK_THRESHOLD`, fixed at 5 in `lib/inventory.ts`)
+- No notification/email when a product crosses the threshold — a
+  merchant still has to check the dashboard
 
 ## Setup
 
