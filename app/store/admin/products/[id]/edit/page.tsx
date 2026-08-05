@@ -10,6 +10,7 @@ type Product = {
   inventory: number;
   image_url: string | null;
   description: string | null;
+  category: string | null;
 };
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,7 +19,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   const { id } = await params;
   const { rows } = await db.query<Product>(
-    "select id, name, price_cents, inventory, image_url, description from products where id = $1 and store_id = $2",
+    "select id, name, price_cents, inventory, image_url, description, category from products where id = $1 and store_id = $2",
     [id, store.id]
   );
   const product = rows[0];
@@ -54,6 +55,14 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
             name="inventory"
             type="number"
             defaultValue={product.inventory}
+            style={{ display: "block", width: "100%" }}
+          />
+        </label>
+        <label>
+          Category (optional)
+          <input
+            name="category"
+            defaultValue={product.category ?? ""}
             style={{ display: "block", width: "100%" }}
           />
         </label>

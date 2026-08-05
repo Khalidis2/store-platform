@@ -14,6 +14,7 @@ export async function createProduct(formData: FormData) {
   const priceCents = Math.round(Number(formData.get("price")) * 100);
   const inventory = Number(formData.get("inventory") || 0);
   const description = String(formData.get("description") || "").trim() || null;
+  const category = String(formData.get("category") || "").trim() || null;
 
   if (!name || !priceCents || priceCents <= 0) {
     throw new Error("Name and a valid price are required");
@@ -26,9 +27,9 @@ export async function createProduct(formData: FormData) {
       : null;
 
   await db.query(
-    `insert into products (store_id, name, price_cents, image_url, inventory, description)
-     values ($1, $2, $3, $4, $5, $6)`,
-    [store.id, name, priceCents, imageUrl, inventory, description]
+    `insert into products (store_id, name, price_cents, image_url, inventory, description, category)
+     values ($1, $2, $3, $4, $5, $6, $7)`,
+    [store.id, name, priceCents, imageUrl, inventory, description, category]
   );
 
   revalidatePath("/admin/products");
@@ -67,6 +68,7 @@ export async function updateProduct(formData: FormData) {
   const priceCents = Math.round(Number(formData.get("price")) * 100);
   const inventory = Number(formData.get("inventory") || 0);
   const description = String(formData.get("description") || "").trim() || null;
+  const category = String(formData.get("category") || "").trim() || null;
 
   if (!name || !priceCents || priceCents <= 0) {
     throw new Error("Name and a valid price are required");
@@ -85,9 +87,9 @@ export async function updateProduct(formData: FormData) {
       : rows[0].image_url;
 
   await db.query(
-    `update products set name = $1, price_cents = $2, inventory = $3, description = $4, image_url = $5
-     where id = $6 and store_id = $7`,
-    [name, priceCents, inventory, description, imageUrl, productId, store.id]
+    `update products set name = $1, price_cents = $2, inventory = $3, description = $4, image_url = $5, category = $6
+     where id = $7 and store_id = $8`,
+    [name, priceCents, inventory, description, imageUrl, category, productId, store.id]
   );
 
   revalidatePath("/admin/products");

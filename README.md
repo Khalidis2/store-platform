@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–22
+# Store Platform — Phases 1–23
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -128,6 +128,17 @@ model, tenancy, auth, payments, order lifecycle) and
   Previously `updateInventory` was the only way to change anything about
   an existing product; a typo in the name or price had no fix short of
   deleting and recreating it.
+
+**Phase 23 — storefront search and category filtering**
+- Products gain an optional `category` free-text tag (set from the
+  product create/edit forms), not a normalized taxonomy — one tag per
+  product, no subcategories
+- Storefront home page gets a search box (`?q=`, case-insensitive
+  substring match on name) and a category dropdown (`?category=`,
+  populated from the store's own distinct categories), both via
+  `searchParams` the same way `/admin/orders`'s filter already works
+- No sorting or pagination yet — every matching product still renders on
+  one page
 
 ## Setup
 

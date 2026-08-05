@@ -10,13 +10,36 @@ type Product = {
   inventory: number;
 };
 
-export default async function StorefrontHome() {
+export default async function StorefrontHome({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string }>;
+}) {
   const store = await getCurrentStore();
   if (!store) return null;
 
-  const { rows: products } = await db.query<Product>(
-    "select id, name, price_cents, image_url, inventory from products where store_id = $1 order by created_at desc",
+  const { q = "", category = "" } = await searchParams;
+
+  const { rows: categories } = await db.query<{ category: string }>(
+    "select distinct category from products where store_id = $1 and category is not null order by category",
     [store.id]
+  );
+
+  const conditions = ["store_id = $1"];
+  const params: unknown[] = [store.id];
+  if (q) {
+    params.push(`%${q}%`);
+    conditions.push(`name ilike $${params.length}`);
+  }
+  if (category) {
+    params.push(category);
+    conditions.push(`category = $${params.length}`);
+  }
+
+  const { rows: products } = await db.query<Product>(
+    `select id, name, price_cents, image_url, inventory from products
+     where ${conditions.join(" and ")} order by created_at desc`,
+    params
   );
 
   return (
@@ -26,6 +49,28 @@ export default async function StorefrontHome() {
           This store is in preview mode — payments aren't wired up yet.
         </p>
       )}
+
+      {(categories.length > 0 || products.length > 0 || q || category) && (
+        <form
+          method="get"
+          style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+        >
+          <input name="q" placeholder="Search products" defaultValue={q} style={{ flex: 1, minWidth: 160 }} />
+          {categories.length > 0 && (
+            <select name="category" defaultValue={category}>
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.category} value={c.category}>
+                  {c.category}
+                </option>
+              ))}
+            </select>
+          )}
+          <button type="submit">Search</button>
+          {(q || category) && <Link href="/">Clear</Link>}
+        </form>
+      )}
+
       <div
         style={{
           display: "grid",
@@ -50,7 +95,9 @@ export default async function StorefrontHome() {
             </div>
           </Link>
         ))}
-        {products.length === 0 && <p style={{ color: "#666" }}>No products yet.</p>}
+        {products.length === 0 && (
+          <p style={{ color: "#666" }}>{q || category ? "No products match your search." : "No products yet."}</p>
+        )}
       </div>
     </main>
   );
