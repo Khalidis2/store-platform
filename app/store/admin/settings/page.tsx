@@ -18,13 +18,21 @@ export default async function SettingsPage() {
           <input name="name" defaultValue={store.name} required style={{ display: "block", width: "100%" }} />
         </label>
         <label>
-          Logo URL (optional)
+          Logo (optional)
+          {store.logo_url && (
+            <div style={{ margin: "0.25rem 0" }}>
+              <img src={store.logo_url} alt="Current logo" style={{ height: 40 }} />
+            </div>
+          )}
           <input
-            name="logoUrl"
-            defaultValue={store.logo_url ?? ""}
-            placeholder="https://..."
+            type="file"
+            name="logo"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             style={{ display: "block", width: "100%" }}
           />
+          <span style={{ color: "#666", fontSize: "0.8rem" }}>
+            JPEG, PNG, WEBP, or GIF, up to 5MB. Leave blank to keep the current logo.
+          </span>
         </label>
         <label>
           Tagline (optional)
