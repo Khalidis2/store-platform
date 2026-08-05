@@ -9,10 +9,21 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const store = await getCurrentStore();
   if (!store) notFound();
 
+  const accentColor = store.accent_color || "#111";
+
   return (
-    <StoreProvider store={{ id: store.id, name: store.name, isLive: store.is_live }}>
+    <StoreProvider
+      store={{
+        id: store.id,
+        name: store.name,
+        isLive: store.is_live,
+        logoUrl: store.logo_url,
+        accentColor: store.accent_color,
+        tagline: store.tagline,
+      }}
+    >
       <CartProvider storeId={store.id}>
-      <div style={{ fontFamily: "system-ui" }}>
+      <div style={{ fontFamily: "system-ui", "--store-accent": accentColor } as React.CSSProperties}>
         <header
           style={{
             display: "flex",
@@ -22,8 +33,13 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
             borderBottom: "1px solid #ddd",
           }}
         >
-          <Link href="/" style={{ fontWeight: 600, textDecoration: "none", color: "inherit" }}>
-            {store.name}
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: "0.75rem", textDecoration: "none", color: "inherit" }}>
+            {store.logo_url ? (
+              <img src={store.logo_url} alt={store.name} style={{ height: 32, width: "auto" }} />
+            ) : (
+              <span style={{ fontWeight: 600 }}>{store.name}</span>
+            )}
+            {store.tagline && <span style={{ color: "#666", fontSize: "0.9rem" }}>{store.tagline}</span>}
           </Link>
           <CartHeaderLink />
         </header>

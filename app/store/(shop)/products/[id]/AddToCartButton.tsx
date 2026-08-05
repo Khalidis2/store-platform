@@ -22,6 +22,14 @@ export default function AddToCartButton({
         setAdded(true);
         setTimeout(() => setAdded(false), 1500);
       }}
+      style={{
+        background: "var(--store-accent, #111)",
+        color: "#fff",
+        border: "none",
+        borderRadius: 4,
+        padding: "0.6rem 1.25rem",
+        cursor: "pointer",
+      }}
     >
       {added ? "Added ✓" : "Add to cart"}
     </button>

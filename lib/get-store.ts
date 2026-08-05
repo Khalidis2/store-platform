@@ -11,6 +11,9 @@ export type Store = {
   stripe_account_id: string | null;
   is_live: boolean;
   platform_fee_percent: number | null;
+  logo_url: string | null;
+  accent_color: string | null;
+  tagline: string | null;
   created_at: string;
 };
 
