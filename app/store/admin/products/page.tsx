@@ -1,6 +1,7 @@
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
 import { createProduct, deleteProduct, updateInventory } from "./actions";
+import { LOW_STOCK_THRESHOLD } from "@/lib/inventory";
 
 type Product = {
   id: string;
@@ -57,10 +58,15 @@ export default async function ProductsPage() {
               <td>{p.name}</td>
               <td>AED {(p.price_cents / 100).toFixed(2)}</td>
               <td>
-                <form action={updateInventory} style={{ display: "flex", gap: "0.25rem" }}>
+                <form action={updateInventory} style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
                   <input type="hidden" name="productId" value={p.id} />
                   <input name="inventory" type="number" defaultValue={p.inventory} style={{ width: 70 }} />
                   <button type="submit">Update</button>
+                  {p.inventory === 0 ? (
+                    <span style={{ color: "crimson", fontSize: "0.8rem" }}>Out of stock</span>
+                  ) : p.inventory <= LOW_STOCK_THRESHOLD ? (
+                    <span style={{ color: "#a66", fontSize: "0.8rem" }}>Low stock</span>
+                  ) : null}
                 </form>
               </td>
               <td>

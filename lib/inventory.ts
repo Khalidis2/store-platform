@@ -2,6 +2,12 @@ import type { PoolClient } from "pg";
 
 export type LineItem = { productId: string; name: string; priceCents: number; quantity: number };
 
+// Below this (inclusive), a product shows up in the merchant dashboard's
+// "Low stock" count and gets flagged on the products page — a fixed
+// platform-wide threshold rather than per-product/per-store configurable,
+// same MVP-scope tradeoff as the platform fee default.
+export const LOW_STOCK_THRESHOLD = 5;
+
 export class InsufficientStockError extends Error {
   constructor(public productName: string) {
     super(`Insufficient stock for "${productName}"`);

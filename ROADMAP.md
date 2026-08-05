@@ -60,8 +60,11 @@ physically returned goods, and per-item refund allocation/restocking
 - **No storefront search, filtering, or categories.** The storefront is a
   single flat grid of every product: fine for a handful of items, breaks
   down past a couple dozen.
-- **No low-stock alerts.** A merchant discovers they're out of stock when
-  a customer hits "Out of stock" on the product page, not before.
+- **Low-stock is now visible (Phase 20), not yet alerted.** The dashboard
+  shows a "Low stock" count and the products page flags individual rows
+  (`LOW_STOCK_THRESHOLD` in `lib/inventory.ts`, fixed at 5, not
+  configurable per store/product) — a merchant still has to go look,
+  there's no email/notification when something crosses the threshold.
 - **No merchant analytics beyond the one revenue number** on the
   dashboard. No sales-over-time, no per-product performance, nothing.
 - **Storefront branding is minimal.** Phase 18 added a logo, an accent
