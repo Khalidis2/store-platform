@@ -1,4 +1,4 @@
-# Store Platform — Phases 1–21
+# Store Platform — Phases 1–22
 
 Multi-tenant e-commerce platform, MVP scope. Hand this repo to Claude Code to
 keep building.
@@ -118,6 +118,16 @@ model, tenancy, auth, payments, order lifecycle) and
   platform admin touched their store, not just their own actions.
 - `lib/audit.ts`'s `logAction()` is the single write path, called from
   `refundOrder`, `deleteProduct`, and platform-admin's `updateStoreFee`.
+
+**Phase 22 — product descriptions and full product editing**
+- Products gain a plain-text `description` column, shown on the
+  storefront product page (line breaks preserved, no rich text/markdown)
+- Products can now be fully edited after creation — name, price,
+  inventory, description, and optionally a new image — at
+  `/admin/products/[id]/edit`, via the new `updateProduct` action.
+  Previously `updateInventory` was the only way to change anything about
+  an existing product; a typo in the name or price had no fix short of
+  deleting and recreating it.
 
 ## Setup
 

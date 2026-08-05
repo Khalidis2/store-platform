@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
 import { createProduct, deleteProduct, updateInventory } from "./actions";
@@ -31,6 +32,7 @@ export default async function ProductsPage() {
         <input name="name" placeholder="Product name" required />
         <input name="price" type="number" step="0.01" placeholder="Price (AED)" required />
         <input name="inventory" type="number" placeholder="Inventory" defaultValue={0} />
+        <textarea name="description" placeholder="Description (optional)" rows={1} style={{ minWidth: 200 }} />
         <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" />
         <button type="submit">Add product</button>
       </form>
@@ -69,7 +71,8 @@ export default async function ProductsPage() {
                   ) : null}
                 </form>
               </td>
-              <td>
+              <td style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <Link href={`/admin/products/${p.id}/edit`}>Edit</Link>
                 <form action={deleteProduct}>
                   <input type="hidden" name="productId" value={p.id} />
                   <button type="submit">Delete</button>

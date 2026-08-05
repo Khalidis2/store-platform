@@ -9,6 +9,7 @@ type Product = {
   price_cents: number;
   image_url: string | null;
   inventory: number;
+  description: string | null;
 };
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -17,7 +18,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const { id } = await params;
   const { rows } = await db.query<Product>(
-    "select id, name, price_cents, image_url, inventory from products where id = $1 and store_id = $2",
+    "select id, name, price_cents, image_url, inventory, description from products where id = $1 and store_id = $2",
     [id, store.id]
   );
   const product = rows[0];
@@ -37,6 +38,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       <div>
         <h1>{product.name}</h1>
         <p style={{ fontSize: "1.25rem" }}>AED {(product.price_cents / 100).toFixed(2)}</p>
+        {product.description && (
+          <p style={{ color: "#444", whiteSpace: "pre-wrap", maxWidth: 400 }}>{product.description}</p>
+        )}
         {product.inventory > 0 ? (
           <AddToCartButton productId={product.id} name={product.name} priceCents={product.price_cents} />
         ) : (

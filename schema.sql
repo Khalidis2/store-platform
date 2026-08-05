@@ -34,6 +34,7 @@ create table if not exists products (
   price_cents int not null,
   image_url text,
   inventory int default 0,
+  description text, -- Phase 22
   created_at timestamptz default now()
 );
 
