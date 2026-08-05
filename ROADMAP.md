@@ -71,8 +71,12 @@ physically returned goods, and per-item refund allocation/restocking
   color, and a tagline — real theming (layout choice, fonts, section
   ordering, custom pages) doesn't exist. Every store's *structure* still
   looks identical.
-- **Product data is minimal.** One image (uploaded, as of Phase 19), no
-  variants (size/color), no rich description field, no categories/tags.
+- **Product data is still fairly minimal.** One image (uploaded, as of
+  Phase 19), a plain-text description (Phase 22, along with actually
+  being able to edit a product's name/price/description/image after
+  creating it — previously only inventory was editable). Still no
+  variants (size/color) and no categories/tags — the storefront is one
+  flat, unfiltered grid regardless of catalog size.
 - **Country list is now the full ISO 3166-1 set**, but there's still no
   concept of per-country shipping rates, tax, or availability — every
   country is treated identically at checkout.
