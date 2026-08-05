@@ -11,6 +11,11 @@ create table if not exists stores (
   stripe_account_id text,
   is_live boolean default false,
   platform_fee_percent numeric(5,2),
+  -- Phase 18 — basic storefront branding. All optional; storefront falls
+  -- back to plain text/default styling when unset.
+  logo_url text,
+  accent_color text,
+  tagline text,
   created_at timestamptz default now()
 );
 

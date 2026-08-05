@@ -2,7 +2,14 @@
 
 import { createContext, useContext, ReactNode } from "react";
 
-type StoreInfo = { id: string; name: string; isLive: boolean };
+type StoreInfo = {
+  id: string;
+  name: string;
+  isLive: boolean;
+  logoUrl: string | null;
+  accentColor: string | null;
+  tagline: string | null;
+};
 
 const StoreContext = createContext<StoreInfo | null>(null);
 

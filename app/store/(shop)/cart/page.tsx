@@ -47,7 +47,18 @@ export default function CartPage() {
         Subtotal: AED {(subtotalCents / 100).toFixed(2)}
       </p>
       <Link href="/checkout">
-        <button>Proceed to checkout</button>
+        <button
+          style={{
+            background: "var(--store-accent, #111)",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            padding: "0.6rem 1.25rem",
+            cursor: "pointer",
+          }}
+        >
+          Proceed to checkout
+        </button>
       </Link>
     </main>
   );

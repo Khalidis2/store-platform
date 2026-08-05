@@ -7,7 +7,7 @@ import { getOwnedStore } from "@/lib/get-store";
 import { stripe } from "@/lib/stripe";
 import { getBaseUrl } from "@/lib/get-base-url";
 
-export async function updateStoreName(formData: FormData) {
+export async function updateStoreProfile(formData: FormData) {
   // Re-checked here, not just in the layout — Server Actions are directly
   // invocable and aren't protected by whatever layout wraps the page they
   // were imported from.
@@ -17,7 +17,19 @@ export async function updateStoreName(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   if (!name) throw new Error("Name is required");
 
-  await db.query("update stores set name = $1 where id = $2", [name, store.id]);
+  const logoUrl = String(formData.get("logoUrl") || "").trim() || null;
+  const tagline = String(formData.get("tagline") || "").trim() || null;
+
+  const accentColorRaw = String(formData.get("accentColor") || "").trim();
+  if (accentColorRaw && !/^#[0-9a-fA-F]{6}$/.test(accentColorRaw)) {
+    throw new Error("Accent color must be a hex value like #4f46e5");
+  }
+  const accentColor = accentColorRaw || null;
+
+  await db.query(
+    "update stores set name = $1, logo_url = $2, accent_color = $3, tagline = $4 where id = $5",
+    [name, logoUrl, accentColor, tagline, store.id]
+  );
 
   revalidatePath("/admin/settings");
 }

@@ -112,7 +112,19 @@ export default function CheckoutPage() {
 
         <p>Subtotal: AED {(subtotalCents / 100).toFixed(2)}</p>
         {error && <p style={{ color: "crimson" }}>{error}</p>}
-        <button type="submit" disabled={submitting}>
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            background: "var(--store-accent, #111)",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            padding: "0.6rem 1.25rem",
+            cursor: submitting ? "default" : "pointer",
+            opacity: submitting ? 0.7 : 1,
+          }}
+        >
           {submitting ? "Redirecting to payment..." : "Continue to payment"}
         </button>
       </form>
