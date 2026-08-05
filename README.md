@@ -190,6 +190,28 @@ actually run `npm run dev` and reach the network) picks this up next.
 Nothing in this checklist has been run yet — treat the first pass through
 it as the real first test of this codebase, not a formality.
 
+## Automated tests
+
+`npm test` runs the Vitest suite in `tests/`. Two kinds of coverage:
+
+- **DB-backed integration tests** (`tests/inventory.test.ts`,
+  `tests/orders.test.ts`) exercise `lib/inventory.ts` and `lib/orders.ts`
+  against a real Postgres connection (`DATABASE_URL` from `.env.local`) —
+  including the inventory reservation race (two concurrent requests for
+  the last unit, only one should win) and refund idempotency. Each test
+  creates its own store/product/order fixtures and cleans them up
+  afterward; **they run against whatever database `DATABASE_URL` points
+  at**, which today is the same database as local dev and production (see
+  ROADMAP.md) — don't point this at a database you don't want test rows
+  transiently appearing in.
+- **`tests/server-action-authorization.test.ts`** is a static check, not a
+  DB test: it reads every `"use server"` file's source and asserts each
+  exported action calls `getOwnedStore()` (or `getPlatformAdminUser()` for
+  platform-admin) rather than the unchecked `getCurrentStore()`. This is
+  the regression test for the cross-tenant Server Action authorization
+  bug — see ARCHITECTURE.md for why that check has to be independent of
+  whatever layout the action's page happens to sit under.
+
 ## Deliberately cut from MVP
 
 Custom domains, theme customization, apps marketplace, multi-currency,
