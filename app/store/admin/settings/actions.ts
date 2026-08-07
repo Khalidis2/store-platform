@@ -9,9 +9,6 @@ import { getBaseUrl } from "@/lib/get-base-url";
 import { uploadImage } from "@/lib/upload-image";
 
 export async function updateStoreProfile(formData: FormData) {
-  // Re-checked here, not just in the layout — Server Actions are directly
-  // invocable and aren't protected by whatever layout wraps the page they
-  // were imported from.
   const store = await getOwnedStore();
   if (!store) throw new Error("Not authorized");
 
@@ -19,6 +16,10 @@ export async function updateStoreProfile(formData: FormData) {
   if (!name) throw new Error("Name is required");
 
   const tagline = String(formData.get("tagline") || "").trim() || null;
+  const notificationEmail = String(formData.get("notificationEmail") || "").trim() || null;
+  if (notificationEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notificationEmail)) {
+    throw new Error("Enter a valid notification email");
+  }
 
   const accentColorRaw = String(formData.get("accentColor") || "").trim();
   if (accentColorRaw && !/^#[0-9a-fA-F]{6}$/.test(accentColorRaw)) {
@@ -26,9 +27,6 @@ export async function updateStoreProfile(formData: FormData) {
   }
   const accentColor = accentColorRaw || null;
 
-  // Only replaces the logo if a new file was actually chosen — an empty
-  // file input still shows up in FormData with size 0, which uploadImage
-  // would otherwise reject as an invalid image.
   const logoFile = formData.get("logo");
   let logoUrl = store.logo_url;
   if (logoFile instanceof File && logoFile.size > 0) {
@@ -36,8 +34,8 @@ export async function updateStoreProfile(formData: FormData) {
   }
 
   await db.query(
-    "update stores set name = $1, logo_url = $2, accent_color = $3, tagline = $4 where id = $5",
-    [name, logoUrl, accentColor, tagline, store.id]
+    "update stores set name = $1, logo_url = $2, accent_color = $3, tagline = $4, notification_email = $5 where id = $6",
+    [name, logoUrl, accentColor, tagline, notificationEmail, store.id]
   );
 
   revalidatePath("/admin/settings");
@@ -50,9 +48,6 @@ export async function connectStripe() {
   let accountId = store.stripe_account_id;
 
   if (!accountId) {
-    // business_type is intentionally left unset — Stripe's hosted onboarding
-    // form collects it (sole establishment, free zone LLC, etc.) along with
-    // the UAE trade license, rather than us guessing it here.
     const account = await stripe.accounts.create({
       type: "custom",
       country: "AE",

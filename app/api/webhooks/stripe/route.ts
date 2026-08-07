@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { releaseInventory, type LineItem } from "@/lib/inventory";
 import { applyRefund } from "@/lib/orders";
+import { sendOrderPaidEmails } from "@/lib/email";
 
 export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
@@ -21,14 +22,14 @@ export async function POST(req: Request) {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.orderId;
       if (orderId) {
-        // Inventory was already reserved (decremented) when the Checkout
-        // Session was created — this just marks the order paid. The
-        // status = 'pending' guard keeps this idempotent against Stripe
-        // redelivering the same event.
-        await db.query(
-          "update orders set status = 'paid', stripe_payment_intent_id = $1 where id = $2 and status = 'pending'",
+        const { rows } = await db.query<{ store_id: string }>(
+          `update orders
+              set status = 'paid', stripe_payment_intent_id = $1
+            where id = $2 and status = 'pending'
+            returning store_id`,
           [session.payment_intent, orderId]
         );
+        if (rows[0]) await sendOrderPaidEmails(orderId, rows[0].store_id);
       }
       break;
     }
@@ -36,25 +37,17 @@ export async function POST(req: Request) {
     case "checkout.session.expired": {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.orderId;
-      if (orderId) {
-        await releaseExpiredReservation(orderId);
-      }
+      if (orderId) await releaseExpiredReservation(orderId);
       break;
     }
 
     case "charge.refunded": {
       const charge = event.data.object as Stripe.Charge;
-      const paymentIntentId =
-        typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+      const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
       if (paymentIntentId) {
-        const { rows } = await db.query(
-          "select id, store_id from orders where stripe_payment_intent_id = $1",
-          [paymentIntentId]
-        );
+        const { rows } = await db.query("select id, store_id from orders where stripe_payment_intent_id = $1", [paymentIntentId]);
         const order = rows[0];
-        if (order) {
-          await applyRefund(order.id, order.store_id, charge.amount_refunded);
-        }
+        if (order) await applyRefund(order.id, order.store_id, charge.amount_refunded);
       }
       break;
     }
@@ -74,27 +67,21 @@ export async function POST(req: Request) {
   return Response.json({ received: true });
 }
 
-// Releases inventory that was reserved but never paid for — a buyer who
-// abandons the Stripe payment page eventually triggers this, restoring the
-// stock rather than leaving it locked up indefinitely.
 async function releaseExpiredReservation(orderId: string) {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-
     const { rows } = await client.query(
       `update orders set status = 'expired'
        where id = $1 and status = 'pending' and inventory_reserved = true
        returning store_id, line_items`,
       [orderId]
     );
-
     if (rows.length > 0) {
       const { store_id, line_items } = rows[0] as { store_id: string; line_items: LineItem[] };
       await releaseInventory(client, store_id, line_items);
       await client.query("update orders set inventory_reserved = false where id = $1", [orderId]);
     }
-
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");

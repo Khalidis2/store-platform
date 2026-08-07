@@ -7,9 +7,6 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // owner_user_id must come from the verified session, never from the
-  // request body — otherwise anyone could POST an arbitrary owner id and
-  // claim a store they don't control.
   if (!user) {
     return Response.json({ error: "Must be signed in to create a store" }, { status: 401 });
   }
@@ -39,9 +36,9 @@ export async function POST(req: Request) {
   }
 
   const result = await db.query(
-    `insert into stores (subdomain, name, owner_user_id)
-     values ($1, $2, $3) returning *`,
-    [clean, name, user.id]
+    `insert into stores (subdomain, name, owner_user_id, notification_email)
+     values ($1, $2, $3, $4) returning *`,
+    [clean, name, user.id, user.email ?? null]
   );
 
   return Response.json(result.rows[0], { status: 201 });

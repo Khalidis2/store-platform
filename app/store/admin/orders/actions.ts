@@ -7,6 +7,7 @@ import { stripe } from "@/lib/stripe";
 import { applyRefund, markOrderDelivered } from "@/lib/orders";
 import { createAftershipTracking, type SupportedCarrier } from "@/lib/aftership";
 import { logAction } from "@/lib/audit";
+import { sendOrderShippedEmail } from "@/lib/email";
 
 export async function markShipped(formData: FormData) {
   const store = await getOwnedStore();
@@ -16,20 +17,16 @@ export async function markShipped(formData: FormData) {
   const trackingNumber = String(formData.get("trackingNumber") || "").trim() || null;
   const carrier = String(formData.get("carrier") || "").trim() || null;
 
-  await db.query(
-    "update orders set status = 'shipped', tracking_number = $1, carrier = $2, has_shipped = true where id = $3 and store_id = $4 and status = 'paid'",
+  const { rows } = await db.query(
+    "update orders set status = 'shipped', tracking_number = $1, carrier = $2, has_shipped = true where id = $3 and store_id = $4 and status = 'paid' returning id",
     [trackingNumber, carrier, orderId, store.id]
   );
 
-  // Only register with AfterShip for carriers we actually support automated
-  // tracking for — "other" (or a blank carrier) just stores the tracking
-  // number as before, no automated delivery detection.
-  if (trackingNumber && (carrier === "aramex" || carrier === "emirates_post")) {
-    await createAftershipTracking({
-      trackingNumber,
-      carrier: carrier as SupportedCarrier,
-      orderId,
-    });
+  if (rows.length > 0) {
+    if (trackingNumber && (carrier === "aramex" || carrier === "emirates_post")) {
+      await createAftershipTracking({ trackingNumber, carrier: carrier as SupportedCarrier, orderId });
+    }
+    await sendOrderShippedEmail(orderId, store.id);
   }
 
   revalidatePath("/admin/orders");
@@ -41,7 +38,6 @@ export async function markDelivered(formData: FormData) {
 
   const orderId = String(formData.get("orderId"));
   await markOrderDelivered(orderId, store.id);
-
   revalidatePath("/admin/orders");
 }
 
@@ -59,28 +55,18 @@ export async function refundOrder(formData: FormData) {
   const order = rows[0];
 
   if (!order) throw new Error("Order not found");
-  if (!["paid", "shipped", "partially_refunded"].includes(order.status)) {
-    throw new Error("This order can't be refunded further");
-  }
-  if (!order.stripe_payment_intent_id) {
-    throw new Error("No payment record found for this order");
-  }
+  if (!["paid", "shipped", "partially_refunded"].includes(order.status)) throw new Error("This order can't be refunded further");
+  if (!order.stripe_payment_intent_id) throw new Error("No payment record found for this order");
 
   const remainingCents = order.total_cents - order.refunded_amount_cents;
-  if (remainingCents <= 0) {
-    throw new Error("This order has already been fully refunded");
-  }
+  if (remainingCents <= 0) throw new Error("This order has already been fully refunded");
 
   let thisRefundCents = remainingCents;
   if (amountInput) {
     const parsed = Math.round(parseFloat(amountInput) * 100);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      throw new Error("Enter a valid refund amount");
-    }
+    if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("Enter a valid refund amount");
     if (parsed > remainingCents) {
-      throw new Error(
-        `Refund amount can't exceed the remaining balance of AED ${(remainingCents / 100).toFixed(2)}`
-      );
+      throw new Error(`Refund amount can't exceed the remaining balance of AED ${(remainingCents / 100).toFixed(2)}`);
     }
     thisRefundCents = parsed;
   }
