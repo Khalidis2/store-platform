@@ -1,12 +1,6 @@
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 
-/**
- * Test fixtures talk to the real database (same one `npm run dev` uses —
- * see ROADMAP.md on why that's not ideal yet). owner_user_id has no FK to
- * auth.users, so tests use a random uuid rather than a real Supabase user;
- * none of the logic under test here cares who the owner actually is.
- */
 export async function createTestStore(overrides: Partial<{ isLive: boolean; hasStripeAccount: boolean }> = {}) {
   const subdomain = `vitest-${randomUUID().slice(0, 8)}`;
   const { rows } = await db.query<{ id: string }>(
@@ -81,7 +75,6 @@ export async function getOrder(orderId: string) {
   return rows[0];
 }
 
-/** Cascades to products/orders via the FK's `on delete cascade`. */
 export async function cleanupStore(storeId: string) {
   await db.query(`delete from stores where id = $1`, [storeId]);
 }
