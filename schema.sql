@@ -62,7 +62,22 @@ create table if not exists audit_log (
   created_at timestamptz default now()
 );
 
+create table if not exists webhook_events (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null check (provider in ('stripe','aftership')),
+  event_id text not null,
+  event_type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'received' check (status in ('received','processing','processed','failed')),
+  attempt_count int not null default 1 check (attempt_count >= 1),
+  error text,
+  received_at timestamptz not null default now(),
+  processed_at timestamptz,
+  unique (provider, event_id)
+);
+
 create index if not exists idx_products_store on products(store_id);
 create index if not exists idx_orders_store on orders(store_id);
 create index if not exists idx_stores_subdomain on stores(subdomain);
 create index if not exists idx_audit_log_store on audit_log(store_id);
+create index if not exists idx_webhook_events_status_received on webhook_events(status, received_at);
