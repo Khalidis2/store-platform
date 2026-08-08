@@ -52,7 +52,8 @@ export function extractTenantSubdomain(host: string, env: NodeJS.ProcessEnv = pr
 }
 
 export function getCookieDomain(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  if (env.NODE_ENV !== "production") return undefined;
+  const production = env.VERCEL_ENV ? env.VERCEL_ENV === "production" : env.NODE_ENV === "production";
+  if (!production) return undefined;
 
   const root = getPlatformRootUrl(env);
   if (!root) return undefined;

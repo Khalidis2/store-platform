@@ -8,6 +8,7 @@ import {
 
 const productionEnv = {
   NODE_ENV: "production",
+  VERCEL_ENV: "production",
   PLATFORM_ROOT_URL: "https://shops.example.com/",
 } as NodeJS.ProcessEnv;
 
@@ -34,6 +35,9 @@ describe("domain configuration", () => {
   it("scopes production auth cookies to the canonical parent domain", () => {
     expect(getCookieDomain(productionEnv)).toBe(".shops.example.com");
     expect(getCookieDomain({ NODE_ENV: "development", PLATFORM_ROOT_URL: "https://shops.example.com" } as NodeJS.ProcessEnv)).toBeUndefined();
+    expect(
+      getCookieDomain({ NODE_ENV: "production", VERCEL_ENV: "preview", PLATFORM_ROOT_URL: "https://shops.example.com" } as NodeJS.ProcessEnv)
+    ).toBeUndefined();
   });
 
   it("derives provider endpoints from one canonical root URL", () => {
