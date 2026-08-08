@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { db } from "./db";
 
 export type RateLimitResult = {
@@ -6,15 +7,27 @@ export type RateLimitResult = {
   retryAfterSeconds: number;
 };
 
-export function getClientIp(req: Request): string {
+function trustedProxyHeaders(env: NodeJS.ProcessEnv) {
+  return env.TRUST_PROXY_HEADERS?.trim().toLowerCase() === "true";
+}
+
+function validIp(value: string | null | undefined) {
+  const candidate = value?.trim();
+  return candidate && isIP(candidate) ? candidate : null;
+}
+
+export function getClientIp(req: Request, env: NodeJS.ProcessEnv = process.env): string {
+  if (!trustedProxyHeaders(env)) return "unknown";
+
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+    for (const part of forwarded.split(",")) {
+      const candidate = validIp(part);
+      if (candidate) return candidate;
+    }
   }
 
-  const realIp = req.headers.get("x-real-ip")?.trim();
-  return realIp || "unknown";
+  return validIp(req.headers.get("x-real-ip")) ?? "unknown";
 }
 
 export async function rateLimit(options: {

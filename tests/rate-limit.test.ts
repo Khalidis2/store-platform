@@ -61,17 +61,31 @@ describe("rateLimit", () => {
 });
 
 describe("getClientIp", () => {
-  it("uses the first forwarded address", () => {
+  it("ignores forwarded headers unless proxy trust is explicitly enabled", () => {
+    const req = new Request("https://example.test", {
+      headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1", "x-real-ip": "198.51.100.8" },
+    });
+    expect(getClientIp(req, {} as NodeJS.ProcessEnv)).toBe("unknown");
+  });
+
+  it("uses the first valid forwarded address when proxy trust is enabled", () => {
     const req = new Request("https://example.test", {
       headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
     });
-    expect(getClientIp(req)).toBe("203.0.113.10");
+    expect(getClientIp(req, { TRUST_PROXY_HEADERS: "true" } as NodeJS.ProcessEnv)).toBe("203.0.113.10");
   });
 
-  it("falls back to x-real-ip", () => {
+  it("skips invalid forwarded values and falls back to a valid x-real-ip", () => {
     const req = new Request("https://example.test", {
-      headers: { "x-real-ip": "198.51.100.8" },
+      headers: { "x-forwarded-for": "spoofed, not-an-ip", "x-real-ip": "198.51.100.8" },
     });
-    expect(getClientIp(req)).toBe("198.51.100.8");
+    expect(getClientIp(req, { TRUST_PROXY_HEADERS: "true" } as NodeJS.ProcessEnv)).toBe("198.51.100.8");
+  });
+
+  it("returns unknown when trusted headers contain no valid IP", () => {
+    const req = new Request("https://example.test", {
+      headers: { "x-forwarded-for": "spoofed", "x-real-ip": "also-invalid" },
+    });
+    expect(getClientIp(req, { TRUST_PROXY_HEADERS: "true" } as NodeJS.ProcessEnv)).toBe("unknown");
   });
 });

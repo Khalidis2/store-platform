@@ -8,8 +8,10 @@ const REQUIRED_PRODUCTION_ENV = [
   "EMAIL_FROM",
   "PLATFORM_ROOT_URL",
   "CRON_SECRET",
+  "AFTERSHIP_API_KEY",
   "AFTERSHIP_WEBHOOK_SECRET",
   "SENTRY_DSN",
+  "TRUST_PROXY_HEADERS",
 ] as const;
 
 const PLACEHOLDER_VALUES = new Set([
@@ -106,6 +108,11 @@ export function validateProductionEnv(env: NodeJS.ProcessEnv = process.env): str
     } catch {
       errors.push("SENTRY_DSN must be a valid HTTPS Sentry DSN");
     }
+  }
+
+  const trustProxyHeaders = env.TRUST_PROXY_HEADERS?.trim().toLowerCase();
+  if (trustProxyHeaders && trustProxyHeaders !== "true") {
+    errors.push("TRUST_PROXY_HEADERS must be true in production after verifying the edge proxy sanitizes forwarded IP headers");
   }
 
   return errors;

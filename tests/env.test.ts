@@ -13,8 +13,10 @@ const validEnv = {
   EMAIL_FROM: "Store Platform <orders@example.com>",
   PLATFORM_ROOT_URL: "https://example.com/",
   CRON_SECRET: "0123456789abcdef0123456789abcdef",
+  AFTERSHIP_API_KEY: "aftership-api-key-value",
   AFTERSHIP_WEBHOOK_SECRET: "aftership-webhook-secret-value",
   SENTRY_DSN: "https://publickey@o123.ingest.sentry.io/456",
+  TRUST_PROXY_HEADERS: "true",
 } as NodeJS.ProcessEnv;
 
 describe("isProductionEnvironment", () => {
@@ -30,20 +32,28 @@ describe("validateProductionEnv", () => {
   });
 
   it("reports missing critical variables", () => {
-    const env = { ...validEnv, STRIPE_WEBHOOK_SECRET: "", RESEND_API_KEY: undefined, SENTRY_DSN: "" };
+    const env = {
+      ...validEnv,
+      STRIPE_WEBHOOK_SECRET: "",
+      RESEND_API_KEY: undefined,
+      AFTERSHIP_API_KEY: undefined,
+      SENTRY_DSN: "",
+    };
     const errors = validateProductionEnv(env);
 
     expect(errors).toContain("STRIPE_WEBHOOK_SECRET is required");
     expect(errors).toContain("RESEND_API_KEY is required");
+    expect(errors).toContain("AFTERSHIP_API_KEY is required");
     expect(errors).toContain("SENTRY_DSN is required");
   });
 
-  it("rejects unsafe root URLs, short cron secrets, and invalid Sentry DSNs", () => {
+  it("rejects unsafe root URLs, short cron secrets, invalid Sentry DSNs, and untrusted proxy configuration", () => {
     const env = {
       ...validEnv,
       PLATFORM_ROOT_URL: "http://example.com/app",
       CRON_SECRET: "short",
       SENTRY_DSN: "http://example.com/no-key",
+      TRUST_PROXY_HEADERS: "false",
     };
     const errors = validateProductionEnv(env);
 
@@ -51,6 +61,7 @@ describe("validateProductionEnv", () => {
     expect(errors).toContain("PLATFORM_ROOT_URL must be the root origin without a path, query, or hash");
     expect(errors).toContain("CRON_SECRET must be at least 32 characters");
     expect(errors).toContain("SENTRY_DSN must be a valid HTTPS Sentry DSN");
+    expect(errors).toContain("TRUST_PROXY_HEADERS must be true in production after verifying the edge proxy sanitizes forwarded IP headers");
   });
 
   it("rejects localhost, wildcard, and vercel.app production roots", () => {
