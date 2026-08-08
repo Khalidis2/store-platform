@@ -72,8 +72,11 @@ Any failure is a launch blocker.
 
 - [ ] Verify Stripe and AfterShip webhook events appear in `webhook_events` as processed.
 - [ ] Force a safe webhook processing failure and confirm it records `failed`, returns non-2xx, and succeeds on retry.
-- [ ] Force a webhook row to remain `processing` longer than the 5-minute lease and confirm the next provider retry reclaims it with `attempt_count + 1`.
-- [ ] Confirm an old worker attempt cannot mark a webhook processed or failed after a newer stale-lease reclaim has occurred.
+- [ ] Force a webhook row to remain `processing` beyond the five-minute lease and confirm the next delivery reclaims it with an incremented attempt.
+- [ ] Confirm an older webhook worker cannot finalize a newer reclaimed attempt.
+- [ ] Force Resend to reject a notification and confirm the email remains in `email_outbox` as `failed` with a future `next_attempt_at`.
+- [ ] Restore Resend delivery, invoke `/api/cron/email-outbox` with `CRON_SECRET`, and confirm the same outbox row becomes `sent` without a duplicate notification.
+- [ ] Confirm production invokes the email outbox worker at an acceptable interval for customer notifications.
 - [ ] Verify checkout/store-creation rate limits return HTTP 429 with `Retry-After`.
 - [ ] Verify `/api/ready` returns 503 when a required schema capability is absent in a disposable environment.
 - [ ] Trigger a safe test exception and confirm it appears in Sentry without customer PII or secrets.

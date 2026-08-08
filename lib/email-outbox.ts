@@ -124,6 +124,7 @@ async function deliver(job: EmailJob) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      "Idempotency-Key": job.dedupe_key,
     },
     body: JSON.stringify({ from, to: [job.recipient], subject: job.subject, html: job.html }),
   });

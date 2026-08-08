@@ -8,8 +8,9 @@ const cronSource = readFileSync("app/api/cron/email-outbox/route.ts", "utf8");
 const migrationSource = readFileSync("migrations/028_phase24_email_outbox.sql", "utf8");
 
 describe("durable email outbox", () => {
-  it("deduplicates business events", () => {
+  it("deduplicates business events in postgres and at Resend", () => {
     expect(outboxSource).toContain("on conflict (dedupe_key) do nothing");
+    expect(outboxSource).toContain('"Idempotency-Key": job.dedupe_key');
     expect(emailSource).toContain("dedupeKey");
     expect(lowStockEmailSource).toContain("dedupeKey");
   });

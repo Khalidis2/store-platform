@@ -1,11 +1,8 @@
+import { createHash } from "crypto";
 import { db } from "./db";
+import { enqueueEmail } from "./email-outbox";
 import { LOW_STOCK_THRESHOLD } from "./inventory";
 import type { LowStockAlert } from "./low-stock";
-import { logError, logWarn } from "./logger";
-
-function configured() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
-}
 
 function escapeHtml(value: string) {
   return value
@@ -32,7 +29,7 @@ function productsUrl(subdomain: string) {
 }
 
 export async function sendLowStockAlertEmail(storeId: string, alerts: LowStockAlert[]) {
-  if (!configured() || alerts.length === 0) return false;
+  if (alerts.length === 0) return false;
 
   const { rows } = await db.query<{ name: string; subdomain: string; notification_email: string | null }>(
     "select name, subdomain, notification_email from stores where id = $1",
@@ -46,33 +43,19 @@ export async function sendLowStockAlertEmail(storeId: string, alerts: LowStockAl
     .map((item) => `<li>${escapeHtml(item.name)} — ${item.inventory} unit${item.inventory === 1 ? "" : "s"} left</li>`)
     .join("");
   const link = url ? `<p><a href="${escapeHtml(url)}">Manage inventory</a></p>` : "";
+  const occurrence = alerts
+    .map((item) => `${item.productId}:${item.alertedAt}`)
+    .sort()
+    .join("|");
+  const digest = createHash("sha256").update(occurrence).digest("hex").slice(0, 24);
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM,
-        to: [store.notification_email],
-        subject: `Low stock — ${store.name}`,
-        html: `<h1>Low stock</h1><p>The following products are at or below ${LOW_STOCK_THRESHOLD} units:</p><ul>${items}</ul>${link}`,
-      }),
-    });
-
-    if (!response.ok) {
-      logWarn("email.delivery.failed", {
-        store_id: storeId,
-        email_kind: "merchant_low_stock",
-        provider_status: response.status,
-      });
-      return false;
-    }
-    return true;
-  } catch (err) {
-    logError("email.delivery.failed", err, { store_id: storeId, email_kind: "merchant_low_stock" });
-    return false;
-  }
+  await enqueueEmail({
+    dedupeKey: `store:${storeId}:low-stock:${digest}`,
+    storeId,
+    kind: "merchant_low_stock",
+    recipient: store.notification_email,
+    subject: `Low stock — ${store.name}`,
+    html: `<h1>Low stock</h1><p>The following products are at or below ${LOW_STOCK_THRESHOLD} units:</p><ul>${items}</ul>${link}`,
+  });
+  return true;
 }
