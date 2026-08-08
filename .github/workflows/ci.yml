@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - agent/test-db-safety
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/store_platform_build
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/store_platform_test
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+      STRIPE_SECRET_KEY: sk_test_ci_value
+      STRIPE_WEBHOOK_SECRET: whsec_ci_value
+      RESEND_API_KEY: re_ci_value
+      EMAIL_FROM: Store Platform CI <ci@example.com>
+      PLATFORM_ROOT_URL: https://shops.example.com/
+      CRON_SECRET: 0123456789abcdef0123456789abcdef
+      AFTERSHIP_API_KEY: aftership-ci-value
+      AFTERSHIP_WEBHOOK_SECRET: aftership-webhook-ci-value
+      SENTRY_DSN: https://publickey@o123.ingest.sentry.io/456
+      TRUST_PROXY_HEADERS: "true"
+      VERCEL_ENV: preview
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create disposable databases
+        run: |
+          createdb store_platform_test
+          createdb store_platform_build
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f schema.sql
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build production bundle
+        env:
+          VERCEL_ENV: production
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Verify pull-request migration upgrade path
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          createdb store_platform_upgrade
+          UPGRADE_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/store_platform_upgrade
+          git show "$BASE_SHA:schema.sql" > /tmp/base-schema.sql
+          psql "$UPGRADE_DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/base-schema.sql
+          psql "$UPGRADE_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;
+          create schema if not exists auth;
+          create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+          create schema if not exists storage;
+          create table if not exists storage.objects (
+            id uuid primary key default gen_random_uuid(),
+            bucket_id text,
+            name text,
+            owner uuid
+          );
+          alter table storage.objects enable row level security;
+          create or replace function storage.foldername(name text) returns text[] language sql immutable as $$ select string_to_array(name, '/') $$;
+          SQL
+          mapfile -t migrations < <(git diff --name-only "$BASE_SHA" HEAD -- 'migrations/*.sql' | sort)
+          if [ "${#migrations[@]}" -eq 0 ]; then
+            echo "No migrations introduced by this pull request."
+            exit 0
+          fi
+          for migration in "${migrations[@]}"; do
+            echo "Applying $migration"
+            psql "$UPGRADE_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
