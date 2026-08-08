@@ -24,6 +24,13 @@ export function getRootHosts(env: NodeJS.ProcessEnv = process.env): string[] {
   return [...hosts];
 }
 
+function hostnameWithoutConfiguredPort(host: string, rootHost: string) {
+  const rootHostname = rootHost.split(":")[0];
+  const configuredPort = rootHost.slice(rootHostname.length);
+  if (!configuredPort) return host;
+  return host.endsWith(configuredPort) ? host.slice(0, -configuredPort.length) : host;
+}
+
 export function extractTenantSubdomain(host: string, env: NodeJS.ProcessEnv = process.env): string | null {
   const normalized = host.trim().toLowerCase().replace(/\.$/, "");
   if (!normalized) return null;
@@ -32,8 +39,7 @@ export function extractTenantSubdomain(host: string, env: NodeJS.ProcessEnv = pr
     if (normalized === rootHost) return null;
 
     const rootHostname = rootHost.split(":")[0];
-    const port = rootHost.includes(":") ? `:${rootHost.split(":").slice(1).join(":")}` : "";
-    const normalizedHostname = normalized.endsWith(port) ? normalized.slice(0, -port.length || undefined) : normalized;
+    const normalizedHostname = hostnameWithoutConfiguredPort(normalized, rootHost);
 
     if (normalizedHostname.endsWith(`.${rootHostname}`)) {
       const prefix = normalizedHostname.slice(0, -(rootHostname.length + 1));

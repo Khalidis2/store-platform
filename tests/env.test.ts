@@ -52,6 +52,18 @@ describe("validateProductionEnv", () => {
     expect(errors).toContain("CRON_SECRET must be at least 32 characters");
     expect(errors).toContain("SENTRY_DSN must be a valid HTTPS Sentry DSN");
   });
+
+  it("rejects localhost, wildcard, and vercel.app production roots", () => {
+    expect(validateProductionEnv({ ...validEnv, PLATFORM_ROOT_URL: "https://localhost/" } as NodeJS.ProcessEnv)).toContain(
+      "PLATFORM_ROOT_URL must use the real production domain"
+    );
+    expect(validateProductionEnv({ ...validEnv, PLATFORM_ROOT_URL: "https://store-platform-ten.vercel.app/" } as NodeJS.ProcessEnv)).toContain(
+      "PLATFORM_ROOT_URL must use a custom production domain, not a vercel.app hostname"
+    );
+    expect(validateProductionEnv({ ...validEnv, PLATFORM_ROOT_URL: "https://*.example.com/" } as NodeJS.ProcessEnv)).toContain(
+      "PLATFORM_ROOT_URL must be a valid URL"
+    );
+  });
 });
 
 describe("assertProductionEnv", () => {

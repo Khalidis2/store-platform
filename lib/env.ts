@@ -71,6 +71,15 @@ export function validateProductionEnv(env: NodeJS.ProcessEnv = process.env): str
       if (url.pathname !== "/" || url.search || url.hash) {
         errors.push("PLATFORM_ROOT_URL must be the root origin without a path, query, or hash");
       }
+      if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) {
+        errors.push("PLATFORM_ROOT_URL must use the real production domain");
+      }
+      if (url.hostname.endsWith(".vercel.app")) {
+        errors.push("PLATFORM_ROOT_URL must use a custom production domain, not a vercel.app hostname");
+      }
+      if (url.hostname.startsWith("*.")) {
+        errors.push("PLATFORM_ROOT_URL must be the canonical root host, not the wildcard host");
+      }
     } catch {
       errors.push("PLATFORM_ROOT_URL must be a valid URL");
     }
