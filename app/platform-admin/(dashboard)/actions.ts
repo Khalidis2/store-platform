@@ -6,8 +6,6 @@ import { getPlatformAdminUser } from "@/lib/platform-admin";
 import { logAction } from "@/lib/audit";
 
 export async function updateStoreFee(formData: FormData) {
-  // Re-checked here rather than trusting the layout guard alone — this
-  // action changes another business's fee rate, worth the extra query.
   const admin = await getPlatformAdminUser();
   if (!admin) throw new Error("Not authorized");
 
@@ -22,7 +20,6 @@ export async function updateStoreFee(formData: FormData) {
     throw new Error("Fee percent must be a number between 0 and 100");
   }
 
-  // Blank means "clear the override, fall back to the platform default".
   await db.query("update stores set platform_fee_percent = $1 where id = $2", [newFeePercent, storeId]);
 
   await logAction({
@@ -36,4 +33,42 @@ export async function updateStoreFee(formData: FormData) {
   });
 
   revalidatePath("/platform-admin");
+}
+
+export async function setPlatformStoreStatus(formData: FormData) {
+  const admin = await getPlatformAdminUser();
+  if (!admin) throw new Error("Not authorized");
+
+  const storeId = String(formData.get("storeId") || "");
+  const requested = String(formData.get("status") || "");
+  if (!storeId || !["suspended", "closed", "draft"].includes(requested)) {
+    throw new Error("Invalid store status update");
+  }
+
+  const { rows } = await db.query<{ status: string }>(
+    "select status from stores where id = $1",
+    [storeId]
+  );
+  const currentStatus = rows[0]?.status;
+  if (!currentStatus) throw new Error("Store not found");
+
+  if (requested === "draft" && currentStatus !== "suspended" && currentStatus !== "closed") {
+    throw new Error("Only suspended or closed stores can be reopened");
+  }
+  if (requested === currentStatus) return;
+
+  await db.query("update stores set status = $1 where id = $2", [requested, storeId]);
+
+  await logAction({
+    storeId,
+    actorUserId: admin.id,
+    actorRole: "platform_admin",
+    action: requested === "suspended" ? "suspend_store" : requested === "closed" ? "close_store" : "reopen_store",
+    targetType: "store",
+    targetId: storeId,
+    metadata: { oldStatus: currentStatus, newStatus: requested },
+  });
+
+  revalidatePath("/platform-admin");
+  revalidatePath("/");
 }
