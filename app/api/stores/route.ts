@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { getClientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   const supabase = await getSupabaseServerClient();
@@ -9,6 +10,25 @@ export async function POST(req: Request) {
 
   if (!user) {
     return Response.json({ error: "Must be signed in to create a store" }, { status: 401 });
+  }
+
+  const userLimit = await rateLimit({
+    scope: "store-create:user",
+    subject: user.id,
+    limit: 3,
+    windowSeconds: 3600,
+  });
+  if (!userLimit.allowed) return rateLimitResponse(userLimit);
+
+  const ip = getClientIp(req);
+  if (ip !== "unknown") {
+    const ipLimit = await rateLimit({
+      scope: "store-create:ip",
+      subject: ip,
+      limit: 10,
+      windowSeconds: 3600,
+    });
+    if (!ipLimit.allowed) return rateLimitResponse(ipLimit);
   }
 
   const { subdomain, name } = await req.json();

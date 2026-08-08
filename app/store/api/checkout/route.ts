@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getCurrentStore } from "@/lib/get-store";
+import { getClientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 type CartLine = { productId: string; quantity: number };
 type ShippingAddress = {
@@ -17,6 +18,15 @@ export async function POST(req: Request) {
     return Response.json({ error: "Store not found" }, { status: 404 });
   }
 
+  const ip = getClientIp(req);
+  const checkoutLimit = await rateLimit({
+    scope: "checkout:create",
+    subject: `${store.id}:${ip}`,
+    limit: 20,
+    windowSeconds: 600,
+  });
+  if (!checkoutLimit.allowed) return rateLimitResponse(checkoutLimit);
+
   const { email, items, shipping } = (await req.json()) as {
     email?: string;
     items?: CartLine[];
@@ -31,8 +41,6 @@ export async function POST(req: Request) {
     return Response.json({ error: "Shipping address is incomplete" }, { status: 400 });
   }
 
-  // Re-fetch authoritative prices (and current stock) from the DB rather
-  // than trusting whatever the client sent.
   const productIds = items.map((i) => i.productId);
   const { rows: products } = await db.query(
     "select id, name, price_cents, inventory from products where store_id = $1 and id = any($2)",
@@ -45,13 +53,10 @@ export async function POST(req: Request) {
 
   for (const item of items) {
     const product = productMap.get(item.productId);
-    if (!product) continue; // product no longer exists — skip rather than fail the whole order
+    if (!product) continue;
 
     const quantity = Math.max(1, Number(item.quantity) || 1);
 
-    // Basic stock check at order time. This doesn't fully prevent overselling
-    // under concurrent checkouts (that needs proper inventory reservation,
-    // deliberately out of MVP scope) — it just stops the obvious case.
     if (quantity > product.inventory) {
       return Response.json(
         { error: `Only ${product.inventory} of "${product.name}" left in stock` },

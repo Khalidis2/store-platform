@@ -76,8 +76,17 @@ create table if not exists webhook_events (
   unique (provider, event_id)
 );
 
+create table if not exists rate_limits (
+  scope text not null,
+  subject text not null,
+  window_start timestamptz not null,
+  request_count integer not null default 1 check (request_count > 0),
+  primary key (scope, subject, window_start)
+);
+
 create index if not exists idx_products_store on products(store_id);
 create index if not exists idx_orders_store on orders(store_id);
 create index if not exists idx_stores_subdomain on stores(subdomain);
 create index if not exists idx_audit_log_store on audit_log(store_id);
 create index if not exists idx_webhook_events_status_received on webhook_events(status, received_at);
+create index if not exists idx_rate_limits_window_start on rate_limits(window_start);
