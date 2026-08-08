@@ -7,12 +7,14 @@ create table if not exists stores (
   owner_user_id uuid not null,
   stripe_account_id text,
   is_live boolean default false,
-  platform_fee_percent numeric(5,2) check (platform_fee_percent is null or (platform_fee_percent >= 0 and platform_fee_percent <= 100)),
+  platform_fee_percent numeric(5,2),
   logo_url text,
   accent_color text,
   tagline text,
   notification_email text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  constraint stores_platform_fee_percent_range_check
+    check (platform_fee_percent is null or (platform_fee_percent >= 0 and platform_fee_percent <= 100))
 );
 
 create table if not exists platform_admins (
@@ -24,12 +26,14 @@ create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references stores(id) on delete cascade,
   name text not null,
-  price_cents int not null check (price_cents >= 0),
+  price_cents int not null,
   image_url text,
-  inventory int default 0 check (inventory >= 0),
+  inventory int default 0,
   description text,
   category text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  constraint products_price_cents_nonnegative_check check (price_cents >= 0),
+  constraint products_inventory_nonnegative_check check (inventory >= 0)
 );
 
 create table if not exists orders (
@@ -37,29 +41,35 @@ create table if not exists orders (
   store_id uuid not null references stores(id) on delete cascade,
   public_token uuid not null unique default gen_random_uuid(),
   customer_email text not null,
-  total_cents int not null check (total_cents >= 0),
-  status text default 'pending' check (status in ('pending','paid','shipped','delivered','expired','partially_refunded','refunded')),
+  total_cents int not null,
+  status text default 'pending',
   stripe_payment_intent_id text,
   line_items jsonb not null default '[]'::jsonb,
   shipping_address jsonb not null default '{}'::jsonb,
   tracking_number text,
-  carrier text check (carrier is null or carrier in ('aramex','emirates_post','other')),
+  carrier text,
   inventory_reserved boolean not null default false,
-  refunded_amount_cents int not null default 0 check (refunded_amount_cents >= 0 and refunded_amount_cents <= total_cents),
+  refunded_amount_cents int not null default 0,
   has_shipped boolean not null default false,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  constraint orders_total_cents_nonnegative_check check (total_cents >= 0),
+  constraint orders_refunded_amount_nonnegative_check check (refunded_amount_cents >= 0),
+  constraint orders_refunded_amount_not_over_total_check check (refunded_amount_cents <= total_cents),
+  constraint orders_status_check check (status in ('pending','paid','shipped','delivered','expired','partially_refunded','refunded')),
+  constraint orders_carrier_check check (carrier is null or carrier in ('aramex','emirates_post','other'))
 );
 
 create table if not exists audit_log (
   id uuid primary key default gen_random_uuid(),
   store_id uuid references stores(id) on delete cascade,
   actor_user_id uuid not null,
-  actor_role text not null check (actor_role in ('merchant','platform_admin')),
+  actor_role text not null,
   action text not null,
   target_type text,
   target_id text,
   metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  constraint audit_log_actor_role_check check (actor_role in ('merchant','platform_admin'))
 );
 
 create table if not exists webhook_events (
