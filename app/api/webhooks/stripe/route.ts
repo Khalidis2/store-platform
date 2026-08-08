@@ -35,8 +35,8 @@ export async function POST(req: Request) {
             `update orders set status = 'paid', stripe_payment_intent_id = $1, paid_at = coalesce(paid_at, now()) where id = $2 and status = 'pending' returning store_id, line_items`,
             [session.payment_intent, orderId]
           );
+          await redeemDiscount(orderId);
           if (rows[0]) {
-            await redeemDiscount(orderId);
             logInfo("order.payment.completed", { request_id: requestId, store_id: rows[0].store_id, order_id: orderId, stripe_event_id: event.id });
             const lowStockAlerts = await claimLowStockAlerts(rows[0].store_id, rows[0].line_items);
             await sendOrderPaidEmails(orderId, rows[0].store_id);
