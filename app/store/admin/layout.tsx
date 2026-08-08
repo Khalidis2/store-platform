@@ -6,7 +6,6 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const store = await getCurrentStore();
   if (!store) redirect("/");
-
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -18,6 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin">Dashboard</Link>
         <Link href="/admin/onboarding">Store setup</Link>
         <Link href="/admin/products">Products</Link>
+        <Link href="/admin/discounts">Discounts</Link>
         <Link href="/admin/orders">Orders</Link>
         <Link href="/admin/settings">Settings</Link>
         <Link href="/admin/audit-log">Activity log</Link>
