@@ -1,10 +1,18 @@
 import { getCurrentStore } from "@/lib/get-store";
+import { db } from "@/lib/db";
+import { isStoreReadyToPublish } from "@/lib/merchant-onboarding";
 import { updateStoreProfile, updateShippingSettings, updateContactAndPolicies, connectStripe } from "./actions";
 import { setStoreStatus } from "./lifecycle-actions";
 
 export default async function SettingsPage() {
   const store = await getCurrentStore();
   if (!store) return null;
+
+  const { rows } = await db.query<{ count: string }>(
+    "select count(*)::text as count from products where store_id = $1 and status = 'active'",
+    [store.id]
+  );
+  const readyToPublish = isStoreReadyToPublish(store, Number(rows[0]?.count ?? 0));
   const canMerchantToggle = store.status === "draft" || store.status === "active";
   const fieldStyle = { display: "block", width: "100%" } as const;
 
@@ -17,8 +25,8 @@ export default async function SettingsPage() {
         {store.status === "suspended" ? <p style={{ color: "crimson" }}>This store has been suspended by the platform owner.</p> : store.status === "closed" ? <p style={{ color: "#666" }}>This store is closed. Contact the platform owner to reopen it.</p> : (
           <form action={setStoreStatus}>
             <input type="hidden" name="status" value={store.status === "active" ? "draft" : "active"} />
-            <button type="submit" disabled={!canMerchantToggle}>{store.status === "active" ? "Unpublish store" : "Publish store"}</button>
-            {store.status === "draft" && <span style={{ marginLeft: "0.5rem", color: "#666" }}>Complete Store setup before publishing.</span>}
+            <button type="submit" disabled={!canMerchantToggle || (store.status === "draft" && !readyToPublish)}>{store.status === "active" ? "Unpublish store" : "Publish store"}</button>
+            {store.status === "draft" && !readyToPublish && <span style={{ marginLeft: "0.5rem", color: "#666" }}>Complete Store setup before publishing.</span>}
           </form>
         )}
       </section>
