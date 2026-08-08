@@ -1,24 +1,33 @@
 import { checkDatabaseReadiness } from "@/lib/readiness";
+import { isProductionEnvironment, validateProductionEnv } from "@/lib/env";
 import { logError, logInfo } from "@/lib/logger";
 
 export async function GET() {
   try {
-    const result = await checkDatabaseReadiness();
-    if (!result.ready) {
-      logError("readiness.failed", new Error("Database readiness checks failed"), {
-        failed_checks: result.checks.filter((check) => !check.ok).length,
+    const database = await checkDatabaseReadiness();
+    const environmentErrors = isProductionEnvironment() ? validateProductionEnv() : [];
+    const checks = [
+      ...database.checks,
+      { name: "env:production", ok: environmentErrors.length === 0 },
+    ];
+    const ready = checks.every((check) => check.ok);
+
+    if (!ready) {
+      logError("readiness.failed", new Error("Readiness checks failed"), {
+        failed_checks: checks.filter((check) => !check.ok).length,
+        environment_error_count: environmentErrors.length,
       });
     } else {
-      logInfo("readiness.ok", { checks: result.checks.length });
+      logInfo("readiness.ok", { checks: checks.length });
     }
 
     return Response.json(
       {
-        status: result.ready ? "ready" : "not_ready",
-        checks: result.checks,
+        status: ready ? "ready" : "not_ready",
+        checks,
       },
       {
-        status: result.ready ? 200 : 503,
+        status: ready ? 200 : 503,
         headers: { "Cache-Control": "no-store" },
       }
     );

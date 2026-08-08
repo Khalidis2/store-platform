@@ -17,7 +17,7 @@ The acceptance store must already exist and be reachable at `{ACCEPTANCE_STORE_S
 The smoke runner verifies:
 
 - `/api/health` returns healthy
-- `/api/ready` confirms Postgres and required schema
+- `/api/ready` confirms Postgres, required schema, and production environment readiness
 - root signup route is reachable
 - wildcard merchant storefront routing works
 - unsigned Stripe webhook requests are rejected
@@ -78,7 +78,9 @@ Any failure is a launch blocker.
 - [ ] Restore Resend delivery, invoke `/api/cron/email-outbox` with `CRON_SECRET`, and confirm the same outbox row becomes `sent` without a duplicate notification.
 - [ ] Confirm production invokes the email outbox worker at an acceptable interval for customer notifications.
 - [ ] Verify checkout/store-creation rate limits return HTTP 429 with `Retry-After`.
-- [ ] Verify `/api/ready` returns 503 when a required schema capability is absent in a disposable environment.
+- [ ] Send a spoofed `x-forwarded-for` value in a controlled environment where `TRUST_PROXY_HEADERS` is disabled and confirm it is ignored.
+- [ ] Verify the production edge proxy sanitizes/replaces forwarded client-IP headers before setting `TRUST_PROXY_HEADERS=true`.
+- [ ] Verify `/api/ready` returns 503 when a required schema capability or production environment variable is absent in a disposable environment.
 - [ ] Trigger a safe test exception and confirm it appears in Sentry without customer PII or secrets.
 - [ ] Confirm production logs contain structured event names and request/order correlation context.
 - [ ] Run the stale-reservation cron and confirm abandoned inventory reservations are released.
@@ -89,6 +91,7 @@ Any failure is a launch blocker.
 - [ ] DNS for the root and wildcard host resolves to the production Vercel project.
 - [ ] Supabase Site URL and redirect allowlist include the canonical production signup/auth callback URLs.
 - [ ] Stripe webhook endpoint points to `/api/webhooks/stripe` and uses the matching production secret.
+- [ ] AfterShip API key is configured and can create a test tracking registration.
 - [ ] AfterShip webhook endpoint points to `/api/webhooks/aftership` and uses the matching production secret.
 - [ ] Resend sender/domain is verified and production delivery succeeds.
 - [ ] Sentry DSN receives both server and browser test events.
