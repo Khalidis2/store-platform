@@ -73,15 +73,30 @@ export async function POST(req: Request) {
   const feePercent = store.platform_fee_percent ?? DEFAULT_PLATFORM_FEE_PERCENT;
   const applicationFeeAmount = Math.round(order.total_cents * (feePercent / 100));
   const baseUrl = await getBaseUrl();
+  const stripeLineItems = [
+    ...lineItems.map((item) => ({
+      price_data: { currency: "aed" as const, product_data: { name: item.name }, unit_amount: item.priceCents },
+      quantity: item.quantity,
+    })),
+    ...(order.shipping_cents > 0
+      ? [
+          {
+            price_data: {
+              currency: "aed" as const,
+              product_data: { name: "Delivery" },
+              unit_amount: order.shipping_cents,
+            },
+            quantity: 1,
+          },
+        ]
+      : []),
+  ];
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: order.customer_email,
-      line_items: lineItems.map((item) => ({
-        price_data: { currency: "aed", product_data: { name: item.name }, unit_amount: item.priceCents },
-        quantity: item.quantity,
-      })),
+      line_items: stripeLineItems,
       payment_intent_data: {
         application_fee_amount: applicationFeeAmount,
         transfer_data: { destination: store.stripe_account_id },
@@ -96,6 +111,8 @@ export async function POST(req: Request) {
       request_id: requestId,
       store_id: store.id,
       order_id: order.id,
+      subtotal_cents: order.subtotal_cents,
+      shipping_cents: order.shipping_cents,
       total_cents: order.total_cents,
       application_fee_cents: applicationFeeAmount,
     });

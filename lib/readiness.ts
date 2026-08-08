@@ -22,16 +22,29 @@ const REQUIRED_TABLES = [
 
 const REQUIRED_COLUMNS = [
   ["stores", "notification_email"],
+  ["stores", "status"],
+  ["stores", "shipping_flat_cents"],
+  ["stores", "free_shipping_threshold_cents"],
+  ["products", "status"],
   ["orders", "public_token"],
+  ["orders", "subtotal_cents"],
+  ["orders", "shipping_cents"],
   ["orders", "refunded_amount_cents"],
   ["orders", "has_shipped"],
 ] as const;
 
 const REQUIRED_CONSTRAINTS = [
   "stores_platform_fee_percent_range_check",
+  "stores_status_check",
+  "stores_shipping_flat_cents_nonnegative_check",
+  "stores_free_shipping_threshold_positive_check",
   "products_price_cents_nonnegative_check",
   "products_inventory_nonnegative_check",
+  "products_status_check",
   "orders_total_cents_nonnegative_check",
+  "orders_subtotal_cents_nonnegative_check",
+  "orders_shipping_cents_nonnegative_check",
+  "orders_total_matches_components_check",
   "orders_refunded_amount_nonnegative_check",
   "orders_refunded_amount_not_over_total_check",
   "orders_status_check",
@@ -67,7 +80,13 @@ export async function checkDatabaseReadiness(): Promise<ReadinessResult> {
       where table_schema = 'public'
         and (table_name, column_name) in (
           ('stores', 'notification_email'),
+          ('stores', 'status'),
+          ('stores', 'shipping_flat_cents'),
+          ('stores', 'free_shipping_threshold_cents'),
+          ('products', 'status'),
           ('orders', 'public_token'),
+          ('orders', 'subtotal_cents'),
+          ('orders', 'shipping_cents'),
           ('orders', 'refunded_amount_cents'),
           ('orders', 'has_shipped')
         )`

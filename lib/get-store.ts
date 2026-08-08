@@ -16,6 +16,8 @@ export type Store = {
   accent_color: string | null;
   tagline: string | null;
   notification_email: string | null;
+  shipping_flat_cents: number;
+  free_shipping_threshold_cents: number | null;
   created_at: string;
 };
 

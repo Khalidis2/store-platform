@@ -1,5 +1,5 @@
 import { getCurrentStore } from "@/lib/get-store";
-import { updateStoreProfile, connectStripe } from "./actions";
+import { updateStoreProfile, updateShippingSettings, connectStripe } from "./actions";
 import { setStoreStatus } from "./lifecycle-actions";
 
 export default async function SettingsPage() {
@@ -76,6 +76,47 @@ export default async function SettingsPage() {
         </label>
         <button type="submit" style={{ alignSelf: "start" }}>Save</button>
       </form>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>UAE delivery</h2>
+        <form
+          action={updateShippingSettings}
+          style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 400 }}
+        >
+          <label>
+            Flat delivery fee (AED)
+            <input
+              name="shippingFlat"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={(store.shipping_flat_cents / 100).toFixed(2)}
+              required
+              style={{ display: "block", width: "100%" }}
+            />
+          </label>
+          <label>
+            Free delivery from (AED, optional)
+            <input
+              name="freeShippingThreshold"
+              type="number"
+              min="0.01"
+              step="0.01"
+              defaultValue={
+                store.free_shipping_threshold_cents === null
+                  ? ""
+                  : (store.free_shipping_threshold_cents / 100).toFixed(2)
+              }
+              placeholder="Leave blank to disable"
+              style={{ display: "block", width: "100%" }}
+            />
+          </label>
+          <span style={{ color: "#666", fontSize: "0.85rem" }}>
+            Delivery is calculated from the product subtotal and snapshotted on each order.
+          </span>
+          <button type="submit" style={{ alignSelf: "start" }}>Save delivery settings</button>
+        </form>
+      </section>
 
       <h2 style={{ marginTop: "2rem" }}>Payments</h2>
 

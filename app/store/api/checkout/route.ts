@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getCurrentStore } from "@/lib/get-store";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { getRequestId, logInfo, logWarn } from "@/lib/logger";
+import { calculateShippingCents } from "@/lib/shipping";
 
 type CartLine = { productId: string; quantity: number };
 type ShippingAddress = {
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
   );
 
   const productMap = new Map(products.map((p: any) => [p.id, p]));
-  let totalCents = 0;
+  let subtotalCents = 0;
   const lineItems: { productId: string; name: string; priceCents: number; quantity: number }[] = [];
 
   for (const item of items) {
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
       return Response.json({ error: `Only ${product.inventory} of "${product.name}" left in stock` }, { status: 409 });
     }
 
-    totalCents += product.price_cents * quantity;
+    subtotalCents += product.price_cents * quantity;
     lineItems.push({ productId: product.id, name: product.name, priceCents: product.price_cents, quantity });
   }
 
@@ -74,10 +75,29 @@ export async function POST(req: Request) {
     return Response.json({ error: "No active items in cart" }, { status: 400 });
   }
 
+  const shippingCents = calculateShippingCents(
+    subtotalCents,
+    store.shipping_flat_cents,
+    store.free_shipping_threshold_cents
+  );
+  const totalCents = subtotalCents + shippingCents;
+
   const result = await db.query(
-    `insert into orders (store_id, customer_email, total_cents, status, line_items, shipping_address)
-     values ($1, $2, $3, 'pending', $4, $5) returning id`,
-    [store.id, email, totalCents, JSON.stringify(lineItems), JSON.stringify(shipping)]
+    `insert into orders (
+       store_id, customer_email, subtotal_cents, shipping_cents, total_cents,
+       status, line_items, shipping_address
+     )
+     values ($1, $2, $3, $4, $5, 'pending', $6, $7)
+     returning id`,
+    [
+      store.id,
+      email,
+      subtotalCents,
+      shippingCents,
+      totalCents,
+      JSON.stringify(lineItems),
+      JSON.stringify(shipping),
+    ]
   );
 
   const orderId = result.rows[0].id;
@@ -86,8 +106,10 @@ export async function POST(req: Request) {
     store_id: store.id,
     order_id: orderId,
     item_count: lineItems.length,
+    subtotal_cents: subtotalCents,
+    shipping_cents: shippingCents,
     total_cents: totalCents,
   });
 
-  return Response.json({ orderId });
+  return Response.json({ orderId, subtotalCents, shippingCents, totalCents });
 }

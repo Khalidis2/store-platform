@@ -6,6 +6,8 @@ type OrderEmailContext = {
   id: string;
   customer_email: string;
   status: string;
+  subtotal_cents: number;
+  shipping_cents: number;
   total_cents: number;
   refunded_amount_cents: number;
   line_items: LineItem[];
@@ -53,9 +55,10 @@ function orderUrl(order: OrderEmailContext) {
 
 async function loadOrder(orderId: string, storeId: string): Promise<OrderEmailContext | null> {
   const { rows } = await db.query<OrderEmailContext>(
-    `select o.id, o.customer_email, o.status, o.total_cents, o.refunded_amount_cents,
-            o.line_items, o.public_token, o.tracking_number, o.carrier,
-            s.name as store_name, s.subdomain, s.notification_email
+    `select o.id, o.customer_email, o.status, o.subtotal_cents, o.shipping_cents,
+            o.total_cents, o.refunded_amount_cents, o.line_items, o.public_token,
+            o.tracking_number, o.carrier, s.name as store_name, s.subdomain,
+            s.notification_email
        from orders o
        join stores s on s.id = o.store_id
       where o.id = $1 and o.store_id = $2`,
@@ -104,6 +107,11 @@ function itemsHtml(items: LineItem[]) {
     .join("");
 }
 
+function totalsHtml(order: OrderEmailContext) {
+  const shipping = order.shipping_cents === 0 ? "Free" : money(order.shipping_cents);
+  return `<p>Subtotal: ${money(order.subtotal_cents)}<br/>Delivery: ${shipping}<br/><strong>Total: ${money(order.total_cents)}</strong></p>`;
+}
+
 function trackingLinkHtml(order: OrderEmailContext) {
   const url = orderUrl(order);
   return url ? `<p><a href="${escapeHtml(url)}">View your order</a></p>` : "";
@@ -117,7 +125,7 @@ export async function sendOrderPaidEmails(orderId: string, storeId: string) {
   await sendEmail(
     order.customer_email,
     `${order.store_name}: order confirmed`,
-    `<h1>Order confirmed</h1><p>Thanks for your order from ${escapeHtml(order.store_name)}.</p><ul>${itemsHtml(order.line_items)}</ul><p><strong>Total: ${money(order.total_cents)}</strong></p>${trackingLinkHtml(order)}`,
+    `<h1>Order confirmed</h1><p>Thanks for your order from ${escapeHtml(order.store_name)}.</p><ul>${itemsHtml(order.line_items)}</ul>${totalsHtml(order)}${trackingLinkHtml(order)}`,
     { storeId, orderId, kind: "customer_order_confirmed" }
   );
 
@@ -125,7 +133,7 @@ export async function sendOrderPaidEmails(orderId: string, storeId: string) {
     await sendEmail(
       order.notification_email,
       `New paid order — ${order.store_name}`,
-      `<h1>New paid order</h1><p>Order ${escapeHtml(order.id.slice(0, 8).toUpperCase())} has been paid.</p><ul>${itemsHtml(order.line_items)}</ul><p><strong>Total: ${money(order.total_cents)}</strong></p>`,
+      `<h1>New paid order</h1><p>Order ${escapeHtml(order.id.slice(0, 8).toUpperCase())} has been paid.</p><ul>${itemsHtml(order.line_items)}</ul>${totalsHtml(order)}`,
       { storeId, orderId, kind: "merchant_new_order" }
     );
   }

@@ -13,10 +13,15 @@ create table if not exists stores (
   accent_color text,
   tagline text,
   notification_email text,
+  shipping_flat_cents int not null default 0,
+  free_shipping_threshold_cents int,
   created_at timestamptz default now(),
   constraint stores_platform_fee_percent_range_check
     check (platform_fee_percent is null or (platform_fee_percent >= 0 and platform_fee_percent <= 100)),
-  constraint stores_status_check check (status in ('draft','active','suspended','closed'))
+  constraint stores_status_check check (status in ('draft','active','suspended','closed')),
+  constraint stores_shipping_flat_cents_nonnegative_check check (shipping_flat_cents >= 0),
+  constraint stores_free_shipping_threshold_positive_check
+    check (free_shipping_threshold_cents is null or free_shipping_threshold_cents > 0)
 );
 
 create table if not exists platform_admins (
@@ -45,6 +50,8 @@ create table if not exists orders (
   store_id uuid not null references stores(id) on delete cascade,
   public_token uuid not null unique default gen_random_uuid(),
   customer_email text not null,
+  subtotal_cents int not null,
+  shipping_cents int not null default 0,
   total_cents int not null,
   status text default 'pending',
   stripe_payment_intent_id text,
@@ -57,6 +64,9 @@ create table if not exists orders (
   has_shipped boolean not null default false,
   created_at timestamptz default now(),
   constraint orders_total_cents_nonnegative_check check (total_cents >= 0),
+  constraint orders_subtotal_cents_nonnegative_check check (subtotal_cents >= 0),
+  constraint orders_shipping_cents_nonnegative_check check (shipping_cents >= 0),
+  constraint orders_total_matches_components_check check (total_cents = subtotal_cents + shipping_cents),
   constraint orders_refunded_amount_nonnegative_check check (refunded_amount_cents >= 0),
   constraint orders_refunded_amount_not_over_total_check check (refunded_amount_cents <= total_cents),
   constraint orders_status_check check (status in ('pending','paid','shipped','delivered','expired','partially_refunded','refunded')),

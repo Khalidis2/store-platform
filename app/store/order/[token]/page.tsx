@@ -11,6 +11,8 @@ type LineItem = {
 type Order = {
   id: string;
   status: string;
+  subtotal_cents: number;
+  shipping_cents: number;
   total_cents: number;
   refunded_amount_cents: number;
   line_items: LineItem[];
@@ -61,8 +63,8 @@ export default async function GuestOrderPage({
   if (!UUID_V4_RE.test(token)) notFound();
 
   const { rows } = await db.query<Order>(
-    `select id, status, total_cents, refunded_amount_cents, line_items,
-            tracking_number, carrier, created_at
+    `select id, status, subtotal_cents, shipping_cents, total_cents,
+            refunded_amount_cents, line_items, tracking_number, carrier, created_at
        from orders
       where store_id = $1 and public_token = $2::uuid
       limit 1`,
@@ -107,14 +109,12 @@ export default async function GuestOrderPage({
             </li>
           ))}
         </ul>
+        <p>Subtotal: AED {(order.subtotal_cents / 100).toFixed(2)}</p>
+        <p>Delivery: {order.shipping_cents === 0 ? "Free" : `AED ${(order.shipping_cents / 100).toFixed(2)}`}</p>
         <p>
           <strong>Total: AED {(order.total_cents / 100).toFixed(2)}</strong>
         </p>
-        {refunded && (
-          <p>
-            Refunded: AED {(order.refunded_amount_cents / 100).toFixed(2)}
-          </p>
-        )}
+        {refunded && <p>Refunded: AED {(order.refunded_amount_cents / 100).toFixed(2)}</p>}
       </section>
 
       <p style={{ marginTop: "2rem", color: "#666", fontSize: "0.9rem" }}>
