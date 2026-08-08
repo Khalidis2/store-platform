@@ -36,7 +36,12 @@ export async function POST(req: Request) {
         const orderId = session.metadata?.orderId;
         if (orderId) {
           const { rows } = await db.query<{ store_id: string }>(
-            `update orders set status = 'paid', stripe_payment_intent_id = $1 where id = $2 and status = 'pending' returning store_id`,
+            `update orders
+                set status = 'paid',
+                    stripe_payment_intent_id = $1,
+                    paid_at = coalesce(paid_at, now())
+              where id = $2 and status = 'pending'
+              returning store_id`,
             [session.payment_intent, orderId]
           );
           if (rows[0]) {

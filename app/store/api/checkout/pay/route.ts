@@ -36,8 +36,12 @@ export async function POST(req: Request) {
     return rateLimitResponse(!storeLimit.allowed ? storeLimit : orderLimit);
   }
 
+  const configuredFeePercent = store.platform_fee_percent ?? DEFAULT_PLATFORM_FEE_PERCENT;
   const client = await db.connect();
   let order;
+  let applicationFeeAmount = 0;
+  let feePercentSnapshot = configuredFeePercent;
+
   try {
     await client.query("BEGIN");
     const { rows } = await client.query("select * from orders where id = $1 and store_id = $2 for update", [orderId, store.id]);
@@ -50,6 +54,15 @@ export async function POST(req: Request) {
     if (order.status !== "pending") {
       await client.query("ROLLBACK");
       return Response.json({ error: "Order already processed" }, { status: 400 });
+    }
+
+    feePercentSnapshot = order.platform_fee_percent_snapshot ?? configuredFeePercent;
+    applicationFeeAmount = order.platform_fee_cents ?? Math.round(order.total_cents * (feePercentSnapshot / 100));
+    if (order.platform_fee_cents == null) {
+      await client.query(
+        "update orders set platform_fee_percent_snapshot = $1, platform_fee_cents = $2 where id = $3",
+        [feePercentSnapshot, applicationFeeAmount, order.id]
+      );
     }
 
     if (!order.inventory_reserved) {
@@ -70,8 +83,6 @@ export async function POST(req: Request) {
   }
 
   const lineItems = order.line_items as LineItem[];
-  const feePercent = store.platform_fee_percent ?? DEFAULT_PLATFORM_FEE_PERCENT;
-  const applicationFeeAmount = Math.round(order.total_cents * (feePercent / 100));
   const baseUrl = await getBaseUrl();
   const stripeLineItems = [
     ...lineItems.map((item) => ({
@@ -115,6 +126,7 @@ export async function POST(req: Request) {
       shipping_cents: order.shipping_cents,
       total_cents: order.total_cents,
       application_fee_cents: applicationFeeAmount,
+      application_fee_percent: feePercentSnapshot,
     });
     return Response.json({ url: session.url });
   } catch (err) {
