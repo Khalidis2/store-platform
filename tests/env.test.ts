@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertProductionEnv, validateProductionEnv } from "@/lib/env";
+import { assertProductionEnv, isProductionEnvironment, validateProductionEnv } from "@/lib/env";
 
 const validEnv = {
   NODE_ENV: "production",
@@ -15,6 +15,13 @@ const validEnv = {
   CRON_SECRET: "0123456789abcdef0123456789abcdef",
   AFTERSHIP_WEBHOOK_SECRET: "aftership-webhook-secret-value",
 } as NodeJS.ProcessEnv;
+
+describe("isProductionEnvironment", () => {
+  it("uses Vercel environment when available", () => {
+    expect(isProductionEnvironment({ NODE_ENV: "production", VERCEL_ENV: "preview" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(isProductionEnvironment({ NODE_ENV: "production", VERCEL_ENV: "production" } as NodeJS.ProcessEnv)).toBe(true);
+  });
+});
 
 describe("validateProductionEnv", () => {
   it("accepts a complete production configuration", () => {
@@ -44,11 +51,14 @@ describe("validateProductionEnv", () => {
 });
 
 describe("assertProductionEnv", () => {
-  it("does not enforce production requirements in development", () => {
+  it("does not enforce production requirements in development or Vercel preview", () => {
     expect(() => assertProductionEnv({ NODE_ENV: "development" } as NodeJS.ProcessEnv)).not.toThrow();
+    expect(() =>
+      assertProductionEnv({ NODE_ENV: "production", VERCEL_ENV: "preview" } as NodeJS.ProcessEnv)
+    ).not.toThrow();
   });
 
-  it("throws with all validation failures in production", () => {
+  it("throws with validation failures in production", () => {
     expect(() =>
       assertProductionEnv({ NODE_ENV: "production", PLATFORM_ROOT_URL: "http://localhost:3000" } as NodeJS.ProcessEnv)
     ).toThrow(/Invalid production environment/);

@@ -20,6 +20,11 @@ const PLACEHOLDER_VALUES = new Set([
   "your-secret-here",
 ]);
 
+export function isProductionEnvironment(env: NodeJS.ProcessEnv = process.env) {
+  if (env.VERCEL_ENV) return env.VERCEL_ENV === "production";
+  return env.NODE_ENV === "production";
+}
+
 export function validateProductionEnv(env: NodeJS.ProcessEnv = process.env): string[] {
   const errors: string[] = [];
 
@@ -84,7 +89,7 @@ export function validateProductionEnv(env: NodeJS.ProcessEnv = process.env): str
 }
 
 export function assertProductionEnv(env: NodeJS.ProcessEnv = process.env) {
-  if (env.NODE_ENV !== "production" && env.VERCEL_ENV !== "production") return;
+  if (!isProductionEnvironment(env)) return;
 
   const errors = validateProductionEnv(env);
   if (errors.length > 0) {
