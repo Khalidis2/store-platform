@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
-import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { cleanupExpiredRateLimits, getClientIp, rateLimit } from "@/lib/rate-limit";
 
 describe("rateLimit", () => {
   const created: Array<{ scope: string; subject: string }> = [];
@@ -38,6 +38,25 @@ describe("rateLimit", () => {
 
     expect(results.filter((result) => result.allowed)).toHaveLength(2);
     expect(results.filter((result) => !result.allowed)).toHaveLength(4);
+  });
+
+  it("prunes expired windows", async () => {
+    const scope = `vitest:${randomUUID()}`;
+    const subject = randomUUID();
+    created.push({ scope, subject });
+
+    await db.query(
+      `insert into rate_limits (scope, subject, window_start, request_count)
+       values ($1, $2, now() - interval '48 hours', 1)`,
+      [scope, subject]
+    );
+
+    expect(await cleanupExpiredRateLimits(24)).toBeGreaterThanOrEqual(1);
+    const remaining = await db.query(
+      "select 1 from rate_limits where scope = $1 and subject = $2",
+      [scope, subject]
+    );
+    expect(remaining.rowCount).toBe(0);
   });
 });
 

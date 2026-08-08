@@ -72,6 +72,17 @@ export async function rateLimit(options: {
   };
 }
 
+export async function cleanupExpiredRateLimits(retentionHours = 24): Promise<number> {
+  if (retentionHours <= 0) throw new Error("Invalid rate-limit retention");
+
+  const result = await db.query(
+    `delete from rate_limits
+     where window_start < now() - make_interval(hours => $1)`,
+    [retentionHours]
+  );
+  return result.rowCount ?? 0;
+}
+
 export function rateLimitResponse(result: RateLimitResult) {
   return Response.json(
     { error: "Too many requests. Please try again later." },
