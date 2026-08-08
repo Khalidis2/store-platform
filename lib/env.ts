@@ -9,6 +9,7 @@ const REQUIRED_PRODUCTION_ENV = [
   "PLATFORM_ROOT_URL",
   "CRON_SECRET",
   "AFTERSHIP_WEBHOOK_SECRET",
+  "SENTRY_DSN",
 ] as const;
 
 const PLACEHOLDER_VALUES = new Set([
@@ -83,6 +84,19 @@ export function validateProductionEnv(env: NodeJS.ProcessEnv = process.env): str
   const cronSecret = env.CRON_SECRET?.trim();
   if (cronSecret && cronSecret.length < 32) {
     errors.push("CRON_SECRET must be at least 32 characters");
+  }
+
+  const sentryDsn = env.SENTRY_DSN?.trim();
+  if (sentryDsn) {
+    try {
+      const url = new URL(sentryDsn);
+      const projectId = url.pathname.split("/").filter(Boolean).at(-1);
+      if (url.protocol !== "https:" || !url.username || !projectId) {
+        errors.push("SENTRY_DSN must be a valid HTTPS Sentry DSN");
+      }
+    } catch {
+      errors.push("SENTRY_DSN must be a valid HTTPS Sentry DSN");
+    }
   }
 
   return errors;

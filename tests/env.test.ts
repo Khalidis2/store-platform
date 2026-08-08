@@ -14,6 +14,7 @@ const validEnv = {
   PLATFORM_ROOT_URL: "https://example.com/",
   CRON_SECRET: "0123456789abcdef0123456789abcdef",
   AFTERSHIP_WEBHOOK_SECRET: "aftership-webhook-secret-value",
+  SENTRY_DSN: "https://publickey@o123.ingest.sentry.io/456",
 } as NodeJS.ProcessEnv;
 
 describe("isProductionEnvironment", () => {
@@ -29,24 +30,27 @@ describe("validateProductionEnv", () => {
   });
 
   it("reports missing critical variables", () => {
-    const env = { ...validEnv, STRIPE_WEBHOOK_SECRET: "", RESEND_API_KEY: undefined };
+    const env = { ...validEnv, STRIPE_WEBHOOK_SECRET: "", RESEND_API_KEY: undefined, SENTRY_DSN: "" };
     const errors = validateProductionEnv(env);
 
     expect(errors).toContain("STRIPE_WEBHOOK_SECRET is required");
     expect(errors).toContain("RESEND_API_KEY is required");
+    expect(errors).toContain("SENTRY_DSN is required");
   });
 
-  it("rejects unsafe root URLs and short cron secrets", () => {
+  it("rejects unsafe root URLs, short cron secrets, and invalid Sentry DSNs", () => {
     const env = {
       ...validEnv,
       PLATFORM_ROOT_URL: "http://example.com/app",
       CRON_SECRET: "short",
+      SENTRY_DSN: "http://example.com/no-key",
     };
     const errors = validateProductionEnv(env);
 
     expect(errors).toContain("PLATFORM_ROOT_URL must use HTTPS in production");
     expect(errors).toContain("PLATFORM_ROOT_URL must be the root origin without a path, query, or hash");
     expect(errors).toContain("CRON_SECRET must be at least 32 characters");
+    expect(errors).toContain("SENTRY_DSN must be a valid HTTPS Sentry DSN");
   });
 });
 
