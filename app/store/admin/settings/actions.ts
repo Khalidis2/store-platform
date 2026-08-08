@@ -25,6 +25,12 @@ function optionalText(value: FormDataEntryValue | null, maxLength: number) {
   return text;
 }
 
+function revalidateSetup() {
+  revalidatePath("/admin");
+  revalidatePath("/admin/onboarding");
+  revalidatePath("/admin/settings");
+}
+
 export async function updateStoreProfile(formData: FormData) {
   const store = await getOwnedStore();
   if (!store) throw new Error("Not authorized");
@@ -39,8 +45,8 @@ export async function updateStoreProfile(formData: FormData) {
   const logoFile = formData.get("logo");
   let logoUrl = store.logo_url;
   if (logoFile instanceof File && logoFile.size > 0) logoUrl = await uploadImage(logoFile, `${store.id}/logo`);
-  await db.query("update stores set name = $1, logo_url = $2, accent_color = $3, tagline = $4, notification_email = $5 where id = $6", [name, logoUrl, accentColor, tagline, notificationEmail, store.id]);
-  revalidatePath("/admin/settings");
+  await db.query("update stores set name = $1, logo_url = $2, accent_color = $3, tagline = $4, notification_email = $5, branding_configured = true where id = $6", [name, logoUrl, accentColor, tagline, notificationEmail, store.id]);
+  revalidateSetup();
 }
 
 export async function updateShippingSettings(formData: FormData) {
@@ -49,14 +55,13 @@ export async function updateShippingSettings(formData: FormData) {
   const flatShippingCents = moneyInputToCents(formData.get("shippingFlat"));
   const freeShippingThresholdCents = moneyInputToCents(formData.get("freeShippingThreshold"), { optional: true });
   if (freeShippingThresholdCents === 0) throw new Error("Free shipping threshold must be greater than AED 0.00 or left blank");
-  await db.query(`update stores set shipping_flat_cents = $1, free_shipping_threshold_cents = $2 where id = $3`, [flatShippingCents, freeShippingThresholdCents, store.id]);
-  revalidatePath("/admin/settings");
+  await db.query("update stores set shipping_flat_cents = $1, free_shipping_threshold_cents = $2, shipping_configured = true where id = $3", [flatShippingCents, freeShippingThresholdCents, store.id]);
+  revalidateSetup();
 }
 
 export async function updateContactAndPolicies(formData: FormData) {
   const store = await getOwnedStore();
   if (!store) throw new Error("Not authorized");
-
   const contactEmail = optionalText(formData.get("contactEmail"), 320);
   if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) throw new Error("Enter a valid contact email");
   const contactPhone = optionalText(formData.get("contactPhone"), 40);
@@ -64,20 +69,8 @@ export async function updateContactAndPolicies(formData: FormData) {
   const returnsPolicy = optionalText(formData.get("returnsPolicy"), 20000);
   const privacyPolicy = optionalText(formData.get("privacyPolicy"), 20000);
   const termsPolicy = optionalText(formData.get("termsPolicy"), 20000);
-
-  await db.query(
-    `update stores
-        set contact_email = $1,
-            contact_phone = $2,
-            shipping_policy = $3,
-            returns_policy = $4,
-            privacy_policy = $5,
-            terms_policy = $6
-      where id = $7`,
-    [contactEmail, contactPhone, shippingPolicy, returnsPolicy, privacyPolicy, termsPolicy, store.id]
-  );
-
-  revalidatePath("/admin/settings");
+  await db.query(`update stores set contact_email = $1, contact_phone = $2, shipping_policy = $3, returns_policy = $4, privacy_policy = $5, terms_policy = $6 where id = $7`, [contactEmail, contactPhone, shippingPolicy, returnsPolicy, privacyPolicy, termsPolicy, store.id]);
+  revalidateSetup();
   revalidatePath("/contact");
   revalidatePath("/policies/shipping");
   revalidatePath("/policies/returns");

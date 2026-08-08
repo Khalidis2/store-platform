@@ -16,8 +16,10 @@ export type Store = {
   accent_color: string | null;
   tagline: string | null;
   notification_email: string | null;
+  branding_configured: boolean;
   shipping_flat_cents: number;
   free_shipping_threshold_cents: number | null;
+  shipping_configured: boolean;
   contact_email: string | null;
   contact_phone: string | null;
   shipping_policy: string | null;
@@ -31,7 +33,6 @@ export async function getCurrentStore(): Promise<Store | null> {
   const h = await headers();
   const subdomain = h.get("x-store-subdomain") ?? extractSubdomain(h.get("host") ?? "");
   if (!subdomain) return null;
-
   const result = await db.query<Store>("select * from stores where subdomain = $1", [subdomain]);
   return result.rows[0] ?? null;
 }
@@ -39,12 +40,8 @@ export async function getCurrentStore(): Promise<Store | null> {
 export async function getOwnedStore(): Promise<Store | null> {
   const store = await getCurrentStore();
   if (!store) return null;
-
   const supabase = await getSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user || user.id !== store.owner_user_id) return null;
   return store;
 }

@@ -8,21 +8,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!store) redirect("/");
 
   const supabase = await getSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-
-  // Tenant-isolation guard: being logged in isn't enough — this user must
-  // specifically own THIS store, or they could view/edit another merchant's
-  // admin panel just by knowing their subdomain.
   if (user.id !== store.owner_user_id) redirect("/login");
 
   return (
     <div style={{ fontFamily: "system-ui" }}>
-      <nav style={{ display: "flex", gap: "1.5rem", padding: "1rem 2rem", borderBottom: "1px solid #ddd" }}>
+      <nav style={{ display: "flex", gap: "1.5rem", padding: "1rem 2rem", borderBottom: "1px solid #ddd", flexWrap: "wrap" }}>
         <Link href="/admin">Dashboard</Link>
+        <Link href="/admin/onboarding">Store setup</Link>
         <Link href="/admin/products">Products</Link>
         <Link href="/admin/orders">Orders</Link>
         <Link href="/admin/settings">Settings</Link>

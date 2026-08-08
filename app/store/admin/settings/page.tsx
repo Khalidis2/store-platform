@@ -11,19 +11,19 @@ export default async function SettingsPage() {
   return (
     <main>
       <h1>Store settings</h1>
-      <section style={{ margin: "1rem 0 2rem" }}>
+      <section id="store-status" style={{ margin: "1rem 0 2rem" }}>
         <h2>Store status</h2>
         <p>Current status: <strong>{store.status}</strong></p>
         {store.status === "suspended" ? <p style={{ color: "crimson" }}>This store has been suspended by the platform owner.</p> : store.status === "closed" ? <p style={{ color: "#666" }}>This store is closed. Contact the platform owner to reopen it.</p> : (
           <form action={setStoreStatus}>
             <input type="hidden" name="status" value={store.status === "active" ? "draft" : "active"} />
-            <button type="submit" disabled={!canMerchantToggle || (store.status === "draft" && !store.is_live)}>{store.status === "active" ? "Unpublish store" : "Publish store"}</button>
-            {store.status === "draft" && !store.is_live && <span style={{ marginLeft: "0.5rem", color: "#a66" }}>Complete Stripe onboarding before publishing.</span>}
+            <button type="submit" disabled={!canMerchantToggle}>{store.status === "active" ? "Unpublish store" : "Publish store"}</button>
+            {store.status === "draft" && <span style={{ marginLeft: "0.5rem", color: "#666" }}>Complete Store setup before publishing.</span>}
           </form>
         )}
       </section>
 
-      <form action={updateStoreProfile} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 520 }}>
+      <form id="branding" action={updateStoreProfile} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 520 }}>
         <h2>Branding</h2>
         <label>Store name<input name="name" defaultValue={store.name} required style={fieldStyle} /></label>
         <label>Order notification email<input name="notificationEmail" type="email" defaultValue={store.notification_email ?? ""} placeholder="orders@example.com" style={fieldStyle} /></label>
@@ -33,7 +33,7 @@ export default async function SettingsPage() {
         <button type="submit" style={{ alignSelf: "start" }}>Save branding</button>
       </form>
 
-      <section style={{ marginTop: "2rem" }}>
+      <section id="shipping" style={{ marginTop: "2rem" }}>
         <h2>UAE delivery</h2>
         <form action={updateShippingSettings} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 520 }}>
           <label>Flat delivery fee (AED)<input name="shippingFlat" type="number" min="0" step="0.01" defaultValue={(store.shipping_flat_cents / 100).toFixed(2)} required style={fieldStyle} /></label>
@@ -42,7 +42,7 @@ export default async function SettingsPage() {
         </form>
       </section>
 
-      <section style={{ marginTop: "2rem" }}>
+      <section id="policies" style={{ marginTop: "2rem" }}>
         <h2>Contact & policies</h2>
         <p style={{ color: "#666", maxWidth: 720 }}>Publish your own business contact details and policies. The platform does not generate legal terms for your business.</p>
         <form action={updateContactAndPolicies} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 720 }}>
@@ -56,8 +56,10 @@ export default async function SettingsPage() {
         </form>
       </section>
 
-      <h2 style={{ marginTop: "2rem" }}>Payments</h2>
-      {store.is_live ? <p style={{ color: "#2a2" }}>Stripe connected — this store can accept payments once published.</p> : store.stripe_account_id ? <><p style={{ color: "#a66" }}>Stripe onboarding started but not finished.</p><form action={connectStripe}><button type="submit">Continue Stripe setup</button></form></> : <><p style={{ color: "#666" }}>Connect Stripe to start accepting payments.</p><form action={connectStripe}><button type="submit">Connect Stripe</button></form></>}
+      <section id="payments" style={{ marginTop: "2rem" }}>
+        <h2>Payments</h2>
+        {store.is_live ? <p style={{ color: "#2a2" }}>Stripe connected — this store can accept payments once published.</p> : store.stripe_account_id ? <><p style={{ color: "#a66" }}>Stripe onboarding started but not finished.</p><form action={connectStripe}><button type="submit">Continue Stripe setup</button></form></> : <><p style={{ color: "#666" }}>Connect Stripe to start accepting payments.</p><form action={connectStripe}><button type="submit">Connect Stripe</button></form></>}
+      </section>
     </main>
   );
 }
