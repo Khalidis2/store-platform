@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { LineItem } from "./inventory";
+import { logError, logWarn } from "./logger";
 
 type OrderEmailContext = {
   id: string;
@@ -45,7 +46,7 @@ function orderUrl(order: OrderEmailContext) {
     url.hash = "";
     return url.toString();
   } catch {
-    console.error("Invalid PLATFORM_ROOT_URL; order email link omitted");
+    logWarn("email.order_link.invalid_root_url");
     return null;
   }
 }
@@ -63,7 +64,7 @@ async function loadOrder(orderId: string, storeId: string): Promise<OrderEmailCo
   return rows[0] ?? null;
 }
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string, context: { storeId: string; orderId: string; kind: string }) {
   if (!configured()) return false;
 
   try {
@@ -73,33 +74,33 @@ async function sendEmail(to: string, subject: string, html: string) {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM,
-        to: [to],
-        subject,
-        html,
-      }),
+      body: JSON.stringify({ from: process.env.EMAIL_FROM, to: [to], subject, html }),
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      console.error("Transactional email failed", response.status, body);
+      logWarn("email.delivery.failed", {
+        store_id: context.storeId,
+        order_id: context.orderId,
+        email_kind: context.kind,
+        provider_status: response.status,
+      });
       return false;
     }
 
     return true;
   } catch (err) {
-    console.error("Transactional email failed", err);
+    logError("email.delivery.failed", err, {
+      store_id: context.storeId,
+      order_id: context.orderId,
+      email_kind: context.kind,
+    });
     return false;
   }
 }
 
 function itemsHtml(items: LineItem[]) {
   return items
-    .map(
-      (item) =>
-        `<li>${escapeHtml(item.name)} × ${item.quantity} — ${money(item.priceCents * item.quantity)}</li>`
-    )
+    .map((item) => `<li>${escapeHtml(item.name)} × ${item.quantity} — ${money(item.priceCents * item.quantity)}</li>`)
     .join("");
 }
 
@@ -116,14 +117,16 @@ export async function sendOrderPaidEmails(orderId: string, storeId: string) {
   await sendEmail(
     order.customer_email,
     `${order.store_name}: order confirmed`,
-    `<h1>Order confirmed</h1><p>Thanks for your order from ${escapeHtml(order.store_name)}.</p><ul>${itemsHtml(order.line_items)}</ul><p><strong>Total: ${money(order.total_cents)}</strong></p>${trackingLinkHtml(order)}`
+    `<h1>Order confirmed</h1><p>Thanks for your order from ${escapeHtml(order.store_name)}.</p><ul>${itemsHtml(order.line_items)}</ul><p><strong>Total: ${money(order.total_cents)}</strong></p>${trackingLinkHtml(order)}`,
+    { storeId, orderId, kind: "customer_order_confirmed" }
   );
 
   if (order.notification_email) {
     await sendEmail(
       order.notification_email,
       `New paid order — ${order.store_name}`,
-      `<h1>New paid order</h1><p>Order ${escapeHtml(order.id.slice(0, 8).toUpperCase())} has been paid.</p><ul>${itemsHtml(order.line_items)}</ul><p><strong>Total: ${money(order.total_cents)}</strong></p>`
+      `<h1>New paid order</h1><p>Order ${escapeHtml(order.id.slice(0, 8).toUpperCase())} has been paid.</p><ul>${itemsHtml(order.line_items)}</ul><p><strong>Total: ${money(order.total_cents)}</strong></p>`,
+      { storeId, orderId, kind: "merchant_new_order" }
     );
   }
 }
@@ -140,7 +143,8 @@ export async function sendOrderShippedEmail(orderId: string, storeId: string) {
   await sendEmail(
     order.customer_email,
     `${order.store_name}: your order has shipped`,
-    `<h1>Your order has shipped</h1>${tracking}${trackingLinkHtml(order)}`
+    `<h1>Your order has shipped</h1>${tracking}${trackingLinkHtml(order)}`,
+    { storeId, orderId, kind: "customer_order_shipped" }
   );
 }
 
@@ -152,7 +156,8 @@ export async function sendOrderDeliveredEmail(orderId: string, storeId: string) 
   await sendEmail(
     order.customer_email,
     `${order.store_name}: order delivered`,
-    `<h1>Order delivered</h1><p>Your order from ${escapeHtml(order.store_name)} has been marked delivered.</p>${trackingLinkHtml(order)}`
+    `<h1>Order delivered</h1><p>Your order from ${escapeHtml(order.store_name)} has been marked delivered.</p>${trackingLinkHtml(order)}`,
+    { storeId, orderId, kind: "customer_order_delivered" }
   );
 }
 
@@ -165,6 +170,7 @@ export async function sendOrderRefundEmail(orderId: string, storeId: string) {
   await sendEmail(
     order.customer_email,
     `${order.store_name}: ${full ? "refund completed" : "partial refund completed"}`,
-    `<h1>${full ? "Refund completed" : "Partial refund completed"}</h1><p>Refunded so far: <strong>${money(order.refunded_amount_cents)}</strong> of ${money(order.total_cents)}.</p>${trackingLinkHtml(order)}`
+    `<h1>${full ? "Refund completed" : "Partial refund completed"}</h1><p>Refunded so far: <strong>${money(order.refunded_amount_cents)}</strong> of ${money(order.total_cents)}.</p>${trackingLinkHtml(order)}`,
+    { storeId, orderId, kind: full ? "customer_refund_completed" : "customer_partial_refund" }
   );
 }

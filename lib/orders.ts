@@ -1,18 +1,23 @@
 import { db } from "./db";
 import { releaseInventory, type LineItem } from "./inventory";
 import { sendOrderDeliveredEmail, sendOrderRefundEmail } from "./email";
+import { logInfo } from "./logger";
 
 export async function markOrderDelivered(orderId: string, storeId: string) {
   const { rows } = await db.query(
     "update orders set status = 'delivered' where id = $1 and store_id = $2 and status = 'shipped' returning id",
     [orderId, storeId]
   );
-  if (rows.length > 0) await sendOrderDeliveredEmail(orderId, storeId);
+  if (rows.length > 0) {
+    logInfo("order.delivered", { store_id: storeId, order_id: orderId });
+    await sendOrderDeliveredEmail(orderId, storeId);
+  }
 }
 
 export async function applyRefund(orderId: string, storeId: string, refundedAmountCents: number) {
   const client = await db.connect();
   let changed = false;
+  let status: "refunded" | "partially_refunded" | null = null;
   try {
     await client.query("BEGIN");
 
@@ -32,10 +37,10 @@ export async function applyRefund(orderId: string, storeId: string, refundedAmou
     }
 
     const isFullRefund = refundedAmountCents >= existing.total_cents;
-    const newStatus = isFullRefund ? "refunded" : "partially_refunded";
+    status = isFullRefund ? "refunded" : "partially_refunded";
 
     await client.query("update orders set status = $1, refunded_amount_cents = $2 where id = $3", [
-      newStatus,
+      status,
       refundedAmountCents,
       orderId,
     ]);
@@ -53,7 +58,14 @@ export async function applyRefund(orderId: string, storeId: string, refundedAmou
     client.release();
   }
 
-  if (changed) await sendOrderRefundEmail(orderId, storeId);
+  if (changed) {
+    logInfo(status === "refunded" ? "order.refund.completed" : "order.refund.partial", {
+      store_id: storeId,
+      order_id: orderId,
+      refunded_amount_cents: refundedAmountCents,
+    });
+    await sendOrderRefundEmail(orderId, storeId);
+  }
   return changed;
 }
 
@@ -80,6 +92,7 @@ export async function releaseStaleReservations(maxAgeMinutes: number): Promise<n
       if (rows.length > 0) {
         await releaseInventory(client, order.store_id, rows[0].line_items as LineItem[]);
         await client.query("update orders set inventory_reserved = false where id = $1", [order.id]);
+        logInfo("inventory.released", { store_id: order.store_id, order_id: order.id, reason: "stale_reservation" });
         released++;
       }
       await client.query("COMMIT");
