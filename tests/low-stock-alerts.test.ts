@@ -5,10 +5,10 @@ const inventorySource = readFileSync("lib/inventory.ts", "utf8");
 const lowStockSource = readFileSync("lib/low-stock.ts", "utf8");
 const webhookSource = readFileSync("app/api/webhooks/stripe/route.ts", "utf8");
 const productActionsSource = readFileSync("app/store/admin/products/actions.ts", "utf8");
-const emailSource = readFileSync("lib/email.ts", "utf8");
+const emailSource = readFileSync("lib/low-stock-email.ts", "utf8");
 const migrationSource = readFileSync("migrations/025_phase26_low_stock_alerts.sql", "utf8");
 
- describe("low stock alerts", () => {
+describe("low stock alerts", () => {
   it("uses the shared low-stock threshold", () => {
     expect(lowStockSource).toContain("LOW_STOCK_THRESHOLD");
     expect(inventorySource).toContain("export const LOW_STOCK_THRESHOLD = 5");

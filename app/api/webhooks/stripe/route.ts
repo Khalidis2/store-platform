@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { releaseInventory, type LineItem } from "@/lib/inventory";
 import { applyRefund } from "@/lib/orders";
 import { sendOrderPaidEmails } from "@/lib/email";
+import { claimLowStockAlerts } from "@/lib/low-stock";
+import { sendLowStockAlertEmail } from "@/lib/low-stock-email";
 import { claimWebhookEvent, markWebhookFailed, markWebhookProcessed } from "@/lib/webhook-events";
 import { requireWebhookSecret } from "@/lib/webhook-runtime";
 import { getRequestId, logError, logInfo, logWarn } from "@/lib/logger";
@@ -18,7 +20,7 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature!, secret);
-  } catch (err) {
+  } catch {
     logWarn("webhook.stripe.signature_rejected", { request_id: requestId });
     return new Response("Webhook signature verification failed", { status: 400 });
   }
@@ -35,18 +37,20 @@ export async function POST(req: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderId = session.metadata?.orderId;
         if (orderId) {
-          const { rows } = await db.query<{ store_id: string }>(
+          const { rows } = await db.query<{ store_id: string; line_items: LineItem[] }>(
             `update orders
                 set status = 'paid',
                     stripe_payment_intent_id = $1,
                     paid_at = coalesce(paid_at, now())
               where id = $2 and status = 'pending'
-              returning store_id`,
+              returning store_id, line_items`,
             [session.payment_intent, orderId]
           );
           if (rows[0]) {
             logInfo("order.payment.completed", { request_id: requestId, store_id: rows[0].store_id, order_id: orderId, stripe_event_id: event.id });
+            const lowStockAlerts = await claimLowStockAlerts(rows[0].store_id, rows[0].line_items);
             await sendOrderPaidEmails(orderId, rows[0].store_id);
+            await sendLowStockAlertEmail(rows[0].store_id, lowStockAlerts);
           }
         }
         break;
