@@ -3,8 +3,10 @@ import { db } from "@/lib/db";
 import { markOrderDelivered } from "@/lib/orders";
 import { claimWebhookEvent, markWebhookFailed, markWebhookProcessed } from "@/lib/webhook-events";
 import { requireWebhookSecret, stableWebhookId } from "@/lib/webhook-runtime";
+import { getRequestId, logError, logInfo, logWarn } from "@/lib/logger";
 
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   const rawBody = await req.text();
   const signature = req.headers.get("aftership-hmac-sha256");
   const secret = requireWebhookSecret("AFTERSHIP_WEBHOOK_SECRET");
@@ -14,6 +16,7 @@ export async function POST(req: Request) {
     const provided = Buffer.from(signature ?? "");
     const calculated = Buffer.from(expected);
     if (provided.length !== calculated.length || !crypto.timingSafeEqual(provided, calculated)) {
+      logWarn("webhook.aftership.signature_rejected", { request_id: requestId });
       return new Response("Invalid signature", { status: 401 });
     }
   }
@@ -22,6 +25,7 @@ export async function POST(req: Request) {
   try {
     payload = JSON.parse(rawBody);
   } catch {
+    logWarn("webhook.aftership.invalid_json", { request_id: requestId });
     return new Response("Invalid JSON", { status: 400 });
   }
 
@@ -33,7 +37,10 @@ export async function POST(req: Request) {
   const eventType = typeof body.event === "string" ? body.event : `tracking.${tag ?? "unknown"}`;
 
   const shouldProcess = await claimWebhookEvent("aftership", eventId, eventType, payload);
-  if (!shouldProcess) return Response.json({ received: true, duplicate: true });
+  if (!shouldProcess) {
+    logInfo("webhook.aftership.duplicate", { request_id: requestId, aftership_event_id: eventId, event_type: eventType });
+    return Response.json({ received: true, duplicate: true });
+  }
 
   try {
     if (orderId && tag === "Delivered") {
@@ -42,14 +49,15 @@ export async function POST(req: Request) {
     }
 
     await markWebhookProcessed("aftership", eventId);
+    logInfo("webhook.aftership.processed", { request_id: requestId, aftership_event_id: eventId, event_type: eventType, order_id: orderId });
     return Response.json({ received: true });
   } catch (err) {
     try {
       await markWebhookFailed("aftership", eventId, err);
     } catch (ledgerError) {
-      console.error("Failed to mark AfterShip webhook failed", ledgerError);
+      logError("webhook.aftership.ledger_failed", ledgerError, { request_id: requestId, aftership_event_id: eventId });
     }
-    console.error("AfterShip webhook processing failed", { eventId, eventType, error: err });
+    logError("webhook.aftership.failed", err, { request_id: requestId, aftership_event_id: eventId, event_type: eventType, order_id: orderId });
     return new Response("Webhook processing failed", { status: 500 });
   }
 }

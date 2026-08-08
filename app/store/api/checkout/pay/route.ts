@@ -4,11 +4,13 @@ import { stripe } from "@/lib/stripe";
 import { getBaseUrl } from "@/lib/get-base-url";
 import { reserveInventory, releaseInventory, InsufficientStockError, type LineItem } from "@/lib/inventory";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { getRequestId, logError, logInfo, logWarn } from "@/lib/logger";
 
 const DEFAULT_PLATFORM_FEE_PERCENT = 5;
 const SESSION_EXPIRY_MINUTES = 31;
 
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   const store = await getCurrentStore();
   if (!store) return Response.json({ error: "Store not found" }, { status: 404 });
 
@@ -23,31 +25,19 @@ export async function POST(req: Request) {
 
   const ip = getClientIp(req);
   const [storeLimit, orderLimit] = await Promise.all([
-    rateLimit({
-      scope: "checkout:pay:store",
-      subject: `${store.id}:${ip}`,
-      limit: 20,
-      windowSeconds: 600,
-    }),
-    rateLimit({
-      scope: "checkout:pay:order",
-      subject: `${store.id}:${orderId}:${ip}`,
-      limit: 5,
-      windowSeconds: 600,
-    }),
+    rateLimit({ scope: "checkout:pay:store", subject: `${store.id}:${ip}`, limit: 20, windowSeconds: 600 }),
+    rateLimit({ scope: "checkout:pay:order", subject: `${store.id}:${orderId}:${ip}`, limit: 5, windowSeconds: 600 }),
   ]);
-  if (!storeLimit.allowed) return rateLimitResponse(storeLimit);
-  if (!orderLimit.allowed) return rateLimitResponse(orderLimit);
+  if (!storeLimit.allowed || !orderLimit.allowed) {
+    logWarn("checkout.payment.rate_limited", { request_id: requestId, store_id: store.id, order_id: orderId });
+    return rateLimitResponse(!storeLimit.allowed ? storeLimit : orderLimit);
+  }
 
   const client = await db.connect();
   let order;
   try {
     await client.query("BEGIN");
-
-    const { rows } = await client.query(
-      "select * from orders where id = $1 and store_id = $2 for update",
-      [orderId, store.id]
-    );
+    const { rows } = await client.query("select * from orders where id = $1 and store_id = $2 for update", [orderId, store.id]);
     order = rows[0];
 
     if (!order) {
@@ -64,12 +54,11 @@ export async function POST(req: Request) {
         await reserveInventory(client, store.id, order.line_items as LineItem[]);
       } catch (err) {
         await client.query("ROLLBACK");
-        if (err instanceof InsufficientStockError) {
-          return Response.json({ error: err.message }, { status: 409 });
-        }
+        if (err instanceof InsufficientStockError) return Response.json({ error: err.message }, { status: 409 });
         throw err;
       }
       await client.query("update orders set inventory_reserved = true where id = $1", [order.id]);
+      logInfo("inventory.reserved", { request_id: requestId, store_id: store.id, order_id: order.id });
     }
 
     await client.query("COMMIT");
@@ -87,11 +76,7 @@ export async function POST(req: Request) {
       mode: "payment",
       customer_email: order.customer_email,
       line_items: lineItems.map((item) => ({
-        price_data: {
-          currency: "aed",
-          product_data: { name: item.name },
-          unit_amount: item.priceCents,
-        },
+        price_data: { currency: "aed", product_data: { name: item.name }, unit_amount: item.priceCents },
         quantity: item.quantity,
       })),
       payment_intent_data: {
@@ -104,16 +89,26 @@ export async function POST(req: Request) {
       cancel_url: `${baseUrl}/checkout`,
     });
 
+    logInfo("checkout.session.created", {
+      request_id: requestId,
+      store_id: store.id,
+      order_id: order.id,
+      total_cents: order.total_cents,
+      application_fee_cents: applicationFeeAmount,
+    });
     return Response.json({ url: session.url });
-  } catch {
+  } catch (err) {
+    logError("checkout.payment.failed", err, { request_id: requestId, store_id: store.id, order_id: order.id });
     const releaseClient = await db.connect();
     try {
       await releaseClient.query("BEGIN");
       await releaseInventory(releaseClient, store.id, lineItems);
       await releaseClient.query("update orders set inventory_reserved = false where id = $1", [order.id]);
       await releaseClient.query("COMMIT");
-    } catch {
+      logInfo("inventory.released", { request_id: requestId, store_id: store.id, order_id: order.id, reason: "checkout_session_failed" });
+    } catch (releaseError) {
       await releaseClient.query("ROLLBACK");
+      logError("inventory.release_failed", releaseError, { request_id: requestId, store_id: store.id, order_id: order.id });
     } finally {
       releaseClient.release();
     }

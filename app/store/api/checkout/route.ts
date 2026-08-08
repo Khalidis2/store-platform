@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getCurrentStore } from "@/lib/get-store";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { getRequestId, logInfo, logWarn } from "@/lib/logger";
 
 type CartLine = { productId: string; quantity: number };
 type ShippingAddress = {
@@ -13,10 +14,9 @@ type ShippingAddress = {
 };
 
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   const store = await getCurrentStore();
-  if (!store) {
-    return Response.json({ error: "Store not found" }, { status: 404 });
-  }
+  if (!store) return Response.json({ error: "Store not found" }, { status: 404 });
 
   const ip = getClientIp(req);
   const checkoutLimit = await rateLimit({
@@ -25,7 +25,10 @@ export async function POST(req: Request) {
     limit: 20,
     windowSeconds: 600,
   });
-  if (!checkoutLimit.allowed) return rateLimitResponse(checkoutLimit);
+  if (!checkoutLimit.allowed) {
+    logWarn("checkout.rate_limited", { request_id: requestId, store_id: store.id });
+    return rateLimitResponse(checkoutLimit);
+  }
 
   const { email, items, shipping } = (await req.json()) as {
     email?: string;
@@ -56,21 +59,12 @@ export async function POST(req: Request) {
     if (!product) continue;
 
     const quantity = Math.max(1, Number(item.quantity) || 1);
-
     if (quantity > product.inventory) {
-      return Response.json(
-        { error: `Only ${product.inventory} of "${product.name}" left in stock` },
-        { status: 409 }
-      );
+      return Response.json({ error: `Only ${product.inventory} of "${product.name}" left in stock` }, { status: 409 });
     }
 
     totalCents += product.price_cents * quantity;
-    lineItems.push({
-      productId: product.id,
-      name: product.name,
-      priceCents: product.price_cents,
-      quantity,
-    });
+    lineItems.push({ productId: product.id, name: product.name, priceCents: product.price_cents, quantity });
   }
 
   if (lineItems.length === 0) {
@@ -83,5 +77,14 @@ export async function POST(req: Request) {
     [store.id, email, totalCents, JSON.stringify(lineItems), JSON.stringify(shipping)]
   );
 
-  return Response.json({ orderId: result.rows[0].id });
+  const orderId = result.rows[0].id;
+  logInfo("checkout.order.created", {
+    request_id: requestId,
+    store_id: store.id,
+    order_id: orderId,
+    item_count: lineItems.length,
+    total_cents: totalCents,
+  });
+
+  return Response.json({ orderId });
 }

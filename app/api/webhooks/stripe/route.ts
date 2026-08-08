@@ -6,8 +6,10 @@ import { applyRefund } from "@/lib/orders";
 import { sendOrderPaidEmails } from "@/lib/email";
 import { claimWebhookEvent, markWebhookFailed, markWebhookProcessed } from "@/lib/webhook-events";
 import { requireWebhookSecret } from "@/lib/webhook-runtime";
+import { getRequestId, logError, logInfo, logWarn } from "@/lib/logger";
 
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   const signature = req.headers.get("stripe-signature");
   const rawBody = await req.text();
   const secret = requireWebhookSecret("STRIPE_WEBHOOK_SECRET");
@@ -17,12 +19,15 @@ export async function POST(req: Request) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature!, secret);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "unknown error";
-    return new Response(`Webhook signature verification failed: ${message}`, { status: 400 });
+    logWarn("webhook.stripe.signature_rejected", { request_id: requestId });
+    return new Response("Webhook signature verification failed", { status: 400 });
   }
 
   const shouldProcess = await claimWebhookEvent("stripe", event.id, event.type, event);
-  if (!shouldProcess) return Response.json({ received: true, duplicate: true });
+  if (!shouldProcess) {
+    logInfo("webhook.stripe.duplicate", { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
+    return Response.json({ received: true, duplicate: true });
+  }
 
   try {
     switch (event.type) {
@@ -31,24 +36,22 @@ export async function POST(req: Request) {
         const orderId = session.metadata?.orderId;
         if (orderId) {
           const { rows } = await db.query<{ store_id: string }>(
-            `update orders
-                set status = 'paid', stripe_payment_intent_id = $1
-              where id = $2 and status = 'pending'
-              returning store_id`,
+            `update orders set status = 'paid', stripe_payment_intent_id = $1 where id = $2 and status = 'pending' returning store_id`,
             [session.payment_intent, orderId]
           );
-          if (rows[0]) await sendOrderPaidEmails(orderId, rows[0].store_id);
+          if (rows[0]) {
+            logInfo("order.payment.completed", { request_id: requestId, store_id: rows[0].store_id, order_id: orderId, stripe_event_id: event.id });
+            await sendOrderPaidEmails(orderId, rows[0].store_id);
+          }
         }
         break;
       }
-
       case "checkout.session.expired": {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderId = session.metadata?.orderId;
         if (orderId) await releaseExpiredReservation(orderId);
         break;
       }
-
       case "charge.refunded": {
         const charge = event.data.object as Stripe.Charge;
         const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
@@ -59,7 +62,6 @@ export async function POST(req: Request) {
         }
         break;
       }
-
       case "account.updated": {
         const account = event.data.object as Stripe.Account;
         if (account.charges_enabled && account.details_submitted) {
@@ -67,20 +69,20 @@ export async function POST(req: Request) {
         }
         break;
       }
-
       default:
         break;
     }
 
     await markWebhookProcessed("stripe", event.id);
+    logInfo("webhook.stripe.processed", { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
     return Response.json({ received: true });
   } catch (err) {
     try {
       await markWebhookFailed("stripe", event.id, err);
     } catch (ledgerError) {
-      console.error("Failed to mark Stripe webhook failed", ledgerError);
+      logError("webhook.stripe.ledger_failed", ledgerError, { request_id: requestId, stripe_event_id: event.id });
     }
-    console.error("Stripe webhook processing failed", { eventId: event.id, eventType: event.type, error: err });
+    logError("webhook.stripe.failed", err, { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
     return new Response("Webhook processing failed", { status: 500 });
   }
 }
@@ -90,9 +92,7 @@ async function releaseExpiredReservation(orderId: string) {
   try {
     await client.query("BEGIN");
     const { rows } = await client.query(
-      `update orders set status = 'expired'
-       where id = $1 and status = 'pending' and inventory_reserved = true
-       returning store_id, line_items`,
+      `update orders set status = 'expired' where id = $1 and status = 'pending' and inventory_reserved = true returning store_id, line_items`,
       [orderId]
     );
     if (rows.length > 0) {
