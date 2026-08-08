@@ -18,6 +18,12 @@ export type Store = {
   notification_email: string | null;
   shipping_flat_cents: number;
   free_shipping_threshold_cents: number | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  shipping_policy: string | null;
+  returns_policy: string | null;
+  privacy_policy: string | null;
+  terms_policy: string | null;
   created_at: string;
 };
 
