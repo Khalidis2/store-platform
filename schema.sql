@@ -7,6 +7,7 @@ create table if not exists stores (
   owner_user_id uuid not null,
   stripe_account_id text,
   is_live boolean default false,
+  status text not null default 'draft',
   platform_fee_percent numeric(5,2),
   logo_url text,
   accent_color text,
@@ -14,7 +15,8 @@ create table if not exists stores (
   notification_email text,
   created_at timestamptz default now(),
   constraint stores_platform_fee_percent_range_check
-    check (platform_fee_percent is null or (platform_fee_percent >= 0 and platform_fee_percent <= 100))
+    check (platform_fee_percent is null or (platform_fee_percent >= 0 and platform_fee_percent <= 100)),
+  constraint stores_status_check check (status in ('draft','active','suspended','closed'))
 );
 
 create table if not exists platform_admins (
@@ -31,9 +33,11 @@ create table if not exists products (
   inventory int default 0,
   description text,
   category text,
+  status text not null default 'draft',
   created_at timestamptz default now(),
   constraint products_price_cents_nonnegative_check check (price_cents >= 0),
-  constraint products_inventory_nonnegative_check check (inventory >= 0)
+  constraint products_inventory_nonnegative_check check (inventory >= 0),
+  constraint products_status_check check (status in ('draft','active','archived'))
 );
 
 create table if not exists orders (
@@ -95,8 +99,10 @@ create table if not exists rate_limits (
 );
 
 create index if not exists idx_products_store on products(store_id);
+create index if not exists idx_products_store_status on products(store_id, status);
 create index if not exists idx_orders_store on orders(store_id);
 create index if not exists idx_stores_subdomain on stores(subdomain);
+create index if not exists idx_stores_status on stores(status);
 create index if not exists idx_audit_log_store on audit_log(store_id);
 create index if not exists idx_webhook_events_status_received on webhook_events(status, received_at);
 create index if not exists idx_rate_limits_window_start on rate_limits(window_start);

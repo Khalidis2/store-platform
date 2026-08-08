@@ -14,6 +14,9 @@ export async function POST(req: Request) {
   const store = await getCurrentStore();
   if (!store) return Response.json({ error: "Store not found" }, { status: 404 });
 
+  if (store.status !== "active") {
+    return Response.json({ error: "This store is not accepting payments" }, { status: 403 });
+  }
   if (!store.is_live || !store.stripe_account_id) {
     return Response.json({ error: "This store isn't set up to accept payments yet" }, { status: 400 });
   }

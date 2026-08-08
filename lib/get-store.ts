@@ -10,6 +10,7 @@ export type Store = {
   owner_user_id: string;
   stripe_account_id: string | null;
   is_live: boolean;
+  status: "draft" | "active" | "suspended" | "closed";
   platform_fee_percent: number | null;
   logo_url: string | null;
   accent_color: string | null;

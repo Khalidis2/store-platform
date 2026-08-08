@@ -17,6 +17,9 @@ export async function POST(req: Request) {
   const requestId = getRequestId(req);
   const store = await getCurrentStore();
   if (!store) return Response.json({ error: "Store not found" }, { status: 404 });
+  if (store.status !== "active") {
+    return Response.json({ error: "This store is not accepting orders" }, { status: 403 });
+  }
 
   const ip = getClientIp(req);
   const checkoutLimit = await rateLimit({
@@ -46,7 +49,7 @@ export async function POST(req: Request) {
 
   const productIds = items.map((i) => i.productId);
   const { rows: products } = await db.query(
-    "select id, name, price_cents, inventory from products where store_id = $1 and id = any($2)",
+    "select id, name, price_cents, inventory from products where store_id = $1 and status = 'active' and id = any($2)",
     [store.id, productIds]
   );
 
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
   }
 
   if (lineItems.length === 0) {
-    return Response.json({ error: "No valid items in cart" }, { status: 400 });
+    return Response.json({ error: "No active items in cart" }, { status: 400 });
   }
 
   const result = await db.query(

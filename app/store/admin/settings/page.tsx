@@ -1,13 +1,38 @@
 import { getCurrentStore } from "@/lib/get-store";
 import { updateStoreProfile, connectStripe } from "./actions";
+import { setStoreStatus } from "./lifecycle-actions";
 
 export default async function SettingsPage() {
   const store = await getCurrentStore();
   if (!store) return null;
 
+  const canMerchantToggle = store.status === "draft" || store.status === "active";
+
   return (
     <main>
       <h1>Store settings</h1>
+
+      <section style={{ margin: "1rem 0 2rem" }}>
+        <h2>Store status</h2>
+        <p>
+          Current status: <strong>{store.status}</strong>
+        </p>
+        {store.status === "suspended" ? (
+          <p style={{ color: "crimson" }}>This store has been suspended by the platform owner.</p>
+        ) : store.status === "closed" ? (
+          <p style={{ color: "#666" }}>This store is closed. Contact the platform owner to reopen it.</p>
+        ) : (
+          <form action={setStoreStatus}>
+            <input type="hidden" name="status" value={store.status === "active" ? "draft" : "active"} />
+            <button type="submit" disabled={!canMerchantToggle || (store.status === "draft" && !store.is_live)}>
+              {store.status === "active" ? "Unpublish store" : "Publish store"}
+            </button>
+            {store.status === "draft" && !store.is_live && (
+              <span style={{ marginLeft: "0.5rem", color: "#a66" }}>Complete Stripe onboarding before publishing.</span>
+            )}
+          </form>
+        )}
+      </section>
 
       <form
         action={updateStoreProfile}
@@ -55,7 +80,7 @@ export default async function SettingsPage() {
       <h2 style={{ marginTop: "2rem" }}>Payments</h2>
 
       {store.is_live ? (
-        <p style={{ color: "#2a2" }}>Stripe connected — this store can accept payments.</p>
+        <p style={{ color: "#2a2" }}>Stripe connected — this store can accept payments once published.</p>
       ) : store.stripe_account_id ? (
         <>
           <p style={{ color: "#a66" }}>Stripe onboarding started but not finished — verification, trade license, or bank details may still be needed.</p>
