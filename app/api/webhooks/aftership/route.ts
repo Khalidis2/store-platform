@@ -36,8 +36,8 @@ export async function POST(req: Request) {
   const eventId = stableWebhookId(body.event_id, rawBody);
   const eventType = typeof body.event === "string" ? body.event : `tracking.${tag ?? "unknown"}`;
 
-  const shouldProcess = await claimWebhookEvent("aftership", eventId, eventType, payload);
-  if (!shouldProcess) {
+  const attempt = await claimWebhookEvent("aftership", eventId, eventType, payload);
+  if (attempt === null) {
     logInfo("webhook.aftership.duplicate", { request_id: requestId, aftership_event_id: eventId, event_type: eventType });
     return Response.json({ received: true, duplicate: true });
   }
@@ -48,12 +48,14 @@ export async function POST(req: Request) {
       if (rows[0]) await markOrderDelivered(orderId, rows[0].store_id);
     }
 
-    await markWebhookProcessed("aftership", eventId);
+    const finalized = await markWebhookProcessed("aftership", eventId, attempt);
+    if (!finalized) logWarn("webhook.aftership.lease_lost", { request_id: requestId, aftership_event_id: eventId, event_type: eventType });
     logInfo("webhook.aftership.processed", { request_id: requestId, aftership_event_id: eventId, event_type: eventType, order_id: orderId });
     return Response.json({ received: true });
   } catch (err) {
     try {
-      await markWebhookFailed("aftership", eventId, err);
+      const finalized = await markWebhookFailed("aftership", eventId, attempt, err);
+      if (!finalized) logWarn("webhook.aftership.lease_lost", { request_id: requestId, aftership_event_id: eventId, event_type: eventType });
     } catch (ledgerError) {
       logError("webhook.aftership.ledger_failed", ledgerError, { request_id: requestId, aftership_event_id: eventId });
     }

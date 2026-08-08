@@ -22,8 +22,8 @@ export async function POST(req: Request) {
   try { event = stripe.webhooks.constructEvent(rawBody, signature!, secret); }
   catch { logWarn("webhook.stripe.signature_rejected", { request_id: requestId }); return new Response("Webhook signature verification failed", { status: 400 }); }
 
-  const shouldProcess = await claimWebhookEvent("stripe", event.id, event.type, event);
-  if (!shouldProcess) { logInfo("webhook.stripe.duplicate", { request_id: requestId, stripe_event_id: event.id, event_type: event.type }); return Response.json({ received: true, duplicate: true }); }
+  const attempt = await claimWebhookEvent("stripe", event.id, event.type, event);
+  if (attempt === null) { logInfo("webhook.stripe.duplicate", { request_id: requestId, stripe_event_id: event.id, event_type: event.type }); return Response.json({ received: true, duplicate: true }); }
 
   try {
     switch (event.type) {
@@ -67,11 +67,15 @@ export async function POST(req: Request) {
       }
       default: break;
     }
-    await markWebhookProcessed("stripe", event.id);
+    const finalized = await markWebhookProcessed("stripe", event.id, attempt);
+    if (!finalized) logWarn("webhook.stripe.lease_lost", { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
     logInfo("webhook.stripe.processed", { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
     return Response.json({ received: true });
   } catch (err) {
-    try { await markWebhookFailed("stripe", event.id, err); }
+    try {
+      const finalized = await markWebhookFailed("stripe", event.id, attempt, err);
+      if (!finalized) logWarn("webhook.stripe.lease_lost", { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
+    }
     catch (ledgerError) { logError("webhook.stripe.ledger_failed", ledgerError, { request_id: requestId, stripe_event_id: event.id }); }
     logError("webhook.stripe.failed", err, { request_id: requestId, stripe_event_id: event.id, event_type: event.type });
     return new Response("Webhook processing failed", { status: 500 });
