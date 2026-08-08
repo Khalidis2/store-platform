@@ -14,11 +14,13 @@ type Product = {
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const store = await getCurrentStore();
-  if (!store) return null;
+  if (!store || store.status !== "active") notFound();
 
   const { id } = await params;
   const { rows } = await db.query<Product>(
-    "select id, name, price_cents, image_url, inventory, description from products where id = $1 and store_id = $2",
+    `select id, name, price_cents, image_url, inventory, description
+       from products
+      where id = $1 and store_id = $2 and status = 'active'`,
     [id, store.id]
   );
   const product = rows[0];

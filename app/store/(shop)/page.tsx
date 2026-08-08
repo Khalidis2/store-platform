@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getCurrentStore } from "@/lib/get-store";
 import { db } from "@/lib/db";
+import {
+  STOREFRONT_PAGE_SIZE,
+  getStorefrontSortSql,
+  parseStorefrontPage,
+  parseStorefrontSort,
+  storefrontPageHref,
+} from "@/lib/storefront-catalog";
 
 type Product = {
   id: string;
@@ -13,19 +21,26 @@ type Product = {
 export default async function StorefrontHome({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; sort?: string; page?: string }>;
 }) {
   const store = await getCurrentStore();
-  if (!store) return null;
+  if (!store || store.status !== "active") notFound();
 
-  const { q = "", category = "" } = await searchParams;
+  const raw = await searchParams;
+  const q = String(raw.q ?? "").trim();
+  const category = String(raw.category ?? "").trim();
+  const sort = parseStorefrontSort(raw.sort);
+  const requestedPage = parseStorefrontPage(raw.page);
 
   const { rows: categories } = await db.query<{ category: string }>(
-    "select distinct category from products where store_id = $1 and category is not null order by category",
+    `select distinct category
+       from products
+      where store_id = $1 and status = 'active' and category is not null
+      order by category`,
     [store.id]
   );
 
-  const conditions = ["store_id = $1"];
+  const conditions = ["store_id = $1", "status = 'active'"];
   const params: unknown[] = [store.id];
   if (q) {
     params.push(`%${q}%`);
@@ -36,21 +51,32 @@ export default async function StorefrontHome({
     conditions.push(`category = $${params.length}`);
   }
 
-  const { rows: products } = await db.query<Product>(
-    `select id, name, price_cents, image_url, inventory from products
-     where ${conditions.join(" and ")} order by created_at desc`,
+  const whereSql = conditions.join(" and ");
+  const { rows: countRows } = await db.query<{ count: string }>(
+    `select count(*)::text as count from products where ${whereSql}`,
     params
   );
+  const totalProducts = Number(countRows[0]?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalProducts / STOREFRONT_PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const offset = (page - 1) * STOREFRONT_PAGE_SIZE;
+  const sortSql = getStorefrontSortSql(sort);
+  const productParams = [...params, STOREFRONT_PAGE_SIZE, offset];
+
+  const { rows: products } = await db.query<Product>(
+    `select id, name, price_cents, image_url, inventory
+       from products
+      where ${whereSql}
+      order by ${sortSql}
+      limit $${params.length + 1} offset $${params.length + 2}`,
+    productParams
+  );
+
+  const hasFilters = Boolean(q || category || sort !== "newest");
 
   return (
     <main style={{ padding: "2rem" }}>
-      {!store.is_live && (
-        <p style={{ color: "#a66", background: "#fff4e5", padding: "0.5rem 1rem", borderRadius: 4 }}>
-          This store is in preview mode — payments aren't wired up yet.
-        </p>
-      )}
-
-      {(categories.length > 0 || products.length > 0 || q || category) && (
+      {(categories.length > 0 || totalProducts > 0 || hasFilters) && (
         <form
           method="get"
           style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
@@ -66,8 +92,13 @@ export default async function StorefrontHome({
               ))}
             </select>
           )}
-          <button type="submit">Search</button>
-          {(q || category) && <Link href="/">Clear</Link>}
+          <select name="sort" defaultValue={sort} aria-label="Sort products">
+            <option value="newest">Newest</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+          </select>
+          <button type="submit">Apply</button>
+          {hasFilters && <Link href="/">Clear</Link>}
         </form>
       )}
 
@@ -99,6 +130,27 @@ export default async function StorefrontHome({
           <p style={{ color: "#666" }}>{q || category ? "No products match your search." : "No products yet."}</p>
         )}
       </div>
+
+      {totalProducts > 0 && totalPages > 1 && (
+        <nav
+          aria-label="Product pages"
+          style={{ display: "flex", gap: "1rem", alignItems: "center", marginTop: "2rem" }}
+        >
+          {page > 1 ? (
+            <Link href={storefrontPageHref({ q, category, sort, page: page - 1 })}>Previous</Link>
+          ) : (
+            <span style={{ color: "#999" }}>Previous</span>
+          )}
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link href={storefrontPageHref({ q, category, sort, page: page + 1 })}>Next</Link>
+          ) : (
+            <span style={{ color: "#999" }}>Next</span>
+          )}
+        </nav>
+      )}
     </main>
   );
 }
