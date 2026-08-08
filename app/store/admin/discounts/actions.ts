@@ -26,13 +26,14 @@ export async function createDiscount(formData: FormData) {
   const maxRedemptions = maxRaw ? Number(maxRaw) : null;
 
   if (!code) throw new Error("Code must be 3–32 letters, numbers, hyphens, or underscores");
-  if (!['percent', 'fixed'].includes(discountType)) throw new Error("Invalid discount type");
+  if (!["percent", "fixed"].includes(discountType)) throw new Error("Invalid discount type");
   if (!Number.isFinite(rawValue) || rawValue <= 0) throw new Error("Discount value must be greater than zero");
-  if (discountType === "percent" && rawValue > 100) throw new Error("Percentage discount cannot exceed 100%");
+  if (discountType === "percent" && (!Number.isInteger(rawValue) || rawValue > 100)) throw new Error("Percentage discount must be a whole number from 1 to 100");
   if (maxRedemptions !== null && (!Number.isInteger(maxRedemptions) || maxRedemptions <= 0)) throw new Error("Usage limit must be a positive whole number");
   if (startsAt && endsAt && startsAt >= endsAt) throw new Error("End time must be after start time");
 
-  const discountValue = discountType === "fixed" ? Math.round(rawValue * 100) : Math.round(rawValue);
+  const discountValue = discountType === "fixed" ? Math.round(rawValue * 100) : rawValue;
+  if (discountType === "fixed" && discountValue < 1) throw new Error("Fixed discount must be at least AED 0.01");
 
   await db.query(
     `insert into discounts (store_id, code, discount_type, discount_value, starts_at, ends_at, max_redemptions)
